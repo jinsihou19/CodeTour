@@ -1,5 +1,6 @@
 package org.uom.lefterisxris.codetour.tours.domain;
 
+import com.intellij.openapi.vfs.VirtualFile;
 import lombok.Builder;
 import lombok.Data;
 
@@ -15,6 +16,7 @@ public class Tour {
    private String nextTour;
    private LocalDateTime createdAt;
    private List<Step> steps;
+   private transient VirtualFile virtualFile;
 
    public Tour() {
    }

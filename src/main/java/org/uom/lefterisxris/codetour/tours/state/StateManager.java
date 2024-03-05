@@ -9,8 +9,10 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.extensions.PluginId;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectUtil;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.vfs.VirtualFileManager;
 import com.intellij.psi.search.FilenameIndex;
 import org.jetbrains.annotations.NotNull;
 import org.uom.lefterisxris.codetour.tours.domain.OnboardingAssistant;
@@ -19,11 +21,22 @@ import org.uom.lefterisxris.codetour.tours.domain.Step;
 import org.uom.lefterisxris.codetour.tours.domain.Tour;
 import org.uom.lefterisxris.codetour.tours.service.AppSettingsState;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -34,375 +47,431 @@ import java.util.stream.Collectors;
  */
 public class StateManager {
 
-   private static Optional<Tour> activeTour = Optional.empty();
-   private static Optional<Integer> activeStepIndex = Optional.empty();
-   private static final Logger LOG = Logger.getInstance(StateManager.class);
+    private static Optional<Tour> activeTour = Optional.empty();
+    private static Optional<Integer> activeStepIndex = Optional.empty();
+    private static final Logger LOG = Logger.getInstance(StateManager.class);
 
-   private final Gson GSON = new GsonBuilder().setPrettyPrinting()
-         .registerTypeAdapter(LocalDateTime.class, new LocalDateTimeAdapter())
-         .create();
-   private final ToursState state = new ToursState();
-   private final Project project;
-   private static LocalDateTime lastValidationTime = LocalDateTime.now().minusHours(2); // to trigger validation on init
+    private final Gson GSON = new GsonBuilder().setPrettyPrinting()
+            .registerTypeAdapter(LocalDateTime.class, new LocalDateTimeAdapter())
+            .create();
+    private final ToursState state = new ToursState();
+    private final Project project;
+    private static LocalDateTime lastValidationTime = LocalDateTime.now().minusHours(2); // to trigger validation on init
 
-   // Caching
-   private final static Set<String> tourFileNames = new HashSet<>(); // the tour file names
-   private final static Set<String> tourTitles = new HashSet<>();
-   private final static Set<String> tourStepFiles = new HashSet<>();
-   private final static Set<String> tourStepFilesWithLines = new HashSet<>();
-   private final static Map<String, String> stepMetaLabels = new HashMap<>(); // string info to be used as label
+    // Caching
+    private final static Set<String> tourFileNames = new HashSet<>(); // the tour file names
+    private final static Set<String> tourTitles = new HashSet<>();
+    private final static Set<String> tourStepFiles = new HashSet<>();
+    private final static Set<String> tourStepFilesWithLines = new HashSet<>();
+    private final static Map<String, String> stepMetaLabels = new HashMap<>(); // string info to be used as label
 
-   public StateManager(Project project) {
-      this.project = project;
-   }
+    public StateManager(Project project) {
+        this.project = project;
+    }
 
-   /**
-    * Persists the provided Tour to filesystem
-    */
-   public Tour createTour(Tour tour) {
-      if (project.getBasePath() == null) return null;
-      final String fileName = tour.getTourFile();
+    /**
+     * Persists the provided Tour to filesystem
+     */
+    public Tour createTour(Tour tour) {
+        if (project.getBasePath() == null) return null;
+        final String fileName = tour.getTourFile();
 
-      LOG.info(String.format("Saving Tour '%s' (%s steps) into file '%s'%n",
-            tour.getTitle(), tour.getSteps().size(), fileName));
+        LOG.info(String.format("Saving Tour '%s' (%s steps) into file '%s'%n",
+                tour.getTitle(), tour.getSteps().size(), fileName));
 
-      WriteAction.runAndWait(() -> {
-         Optional<VirtualFile> toursDir = getToursDir();
-         if (toursDir.isEmpty()) {
-            toursDir = createToursDir();
-            if (toursDir.isEmpty())
-               throw new PluginException("Could not find or creat '.tours' directory. Tour creation failed",
-                     PluginId.findId("org.uom.lefterisxris.codetour"));
-         }
-         // Persist the file
-         try {
-            final VirtualFile newTourVfile = toursDir.get().createChildData(this, fileName);
-            newTourVfile.setBinaryContent(GSON.toJson(tour).getBytes(StandardCharsets.UTF_8));
-            reloadState();
-         } catch (IOException e) {
-            LOG.error("Failed to create tour file: " + e.getMessage(), e);
-         }
-      });
-      setActiveTour(tour);
-      return tour;
-   }
-
-   /**
-    * Updates the given tour by deleting and recreating it
-    *
-    * @param tour The tour to persist
-    * @return the updated tour
-    */
-   public Tour updateTour(Tour tour) {
-      deleteTour(tour, false);
-      createTour(tour);
-      return tour;
-   }
-
-   public Tour deleteTour(Tour tour) {
-      return deleteTour(tour, true);
-   }
-
-   /**
-    * Tries to find the corresponding file for the give tour, and if found it deletes it
-    *
-    * @param tour The tour to delete
-    * @return the deleted tour
-    */
-   public Tour deleteTour(Tour tour, boolean reload) {
-      findTourFile(tour).ifPresent(virtualFile -> {
-         WriteAction.runAndWait(() -> {
-            try {
-               virtualFile.delete(this);
-               if (reload)
-                  reloadState();
-            } catch (IOException e) {
-               e.printStackTrace();
+        WriteAction.runAndWait(() -> {
+            Optional<VirtualFile> toursDir = getToursDir();
+            if (toursDir.isEmpty()) {
+                toursDir = createToursDir();
+                if (toursDir.isEmpty())
+                    throw new PluginException("Could not find or creat '.tours' directory. Tour creation failed",
+                            PluginId.findId("org.uom.lefterisxris.codetour"));
             }
-         });
-      });
-      return tour;
-   }
+            // Persist the file
+            try {
+                final VirtualFile newTourVfile = toursDir.get().createChildData(this, fileName);
+                newTourVfile.setBinaryContent(GSON.toJson(tour).getBytes(StandardCharsets.UTF_8));
+                reloadState();
+            } catch (IOException e) {
+                LOG.error("Failed to create tour file: " + e.getMessage(), e);
+            }
+        });
+        setActiveTour(tour);
+        return tour;
+    }
 
-   public List<Tour> reloadState() {
-      state.clear();
-      return getTours();
-   }
+    /**
+     * Updates the given tour by deleting and recreating it
+     *
+     * @param tour The tour to persist
+     * @return the updated tour
+     */
+    public Tour updateTour(Tour tour) {
+//        deleteTour(tour, false);
+//        createTour(tour);
+//        // todo: 重新写一下更新
 
-   public List<Tour> getTours() {
-      if (state.getTours().isEmpty())
-         state.getTours().addAll(loadTours(project));
-      return state.getTours();
-   }
+        WriteAction.runAndWait(() -> {
+            try {
+                final VirtualFile newTourVfile = tour.getVirtualFile();
+                newTourVfile.setBinaryContent(GSON.toJson(tour).getBytes(StandardCharsets.UTF_8));
+                reloadState();
+            } catch (IOException e) {
+                LOG.error("Failed to create tour file: " + e.getMessage(), e);
+            }
+        });
+        setActiveTour(tour);
 
-   public boolean shouldNotify(Project project) {
-      return true;
-   }
+        return tour;
+    }
 
-   private List<Tour> loadTours(@NotNull Project project) {
+    public Tour deleteTour(Tour tour) {
+        return deleteTour(tour, true);
+    }
 
-      final List<Tour> tours = new ArrayList<>();
-      var settings = AppSettingsState.getInstance();
-
-      // Add the Onboarding Tour if configured
-      if (settings.isOnboardingAssistantOn()) {
-         final Tour onboardingTour = OnboardingAssistant.getInstance().getTour();
-         if (onboardingTour != null)
-            tours.add(onboardingTour);
-      }
-
-      var userTours = project.getBasePath() == null ? loadFromIndex(project) : loadFromFS();
-
-      // Sort User Tours. By default, they are sorted base on Title. Otherwise, it follows User Settings
-      Comparator<Tour> comparator = Comparator.comparing(Tour::getTitle);
-      switch (settings.getSortOption()) {
-         case FILENAME -> comparator = Comparator.comparing(Tour::getTourFile);
-         case CREATION_DATE ->
-               comparator = Comparator.comparing(Tour::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()));
-      }
-      if (AppSettingsState.SortDirectionE.DESC.equals(settings.getSortDirection()))
-         comparator = comparator.reversed(); // ASC,DESC
-      LOG.info("Sorting Tours using: %s - %s".formatted(settings.getSortOption(), settings.getSortDirection()));
-      userTours.sort(comparator);
-
-      tours.addAll(userTours);
-      // Cache some info
-      tourFileNames.clear();
-      tourTitles.clear();
-      tourStepFiles.clear();
-      tourStepFilesWithLines.clear();
-      stepMetaLabels.clear();
-
-      tours.forEach(tour -> {
-         tourFileNames.add(tour.getTourFile());
-         tourTitles.add(tour.getTitle());
-         int currentStepIndex = 0;
-         final int totalSteps = tour.getSteps().size();
-         for (Step step : tour.getSteps()) {
-            currentStepIndex++;
-            tourStepFiles.add(step.getFile());
-            if (step.getFile() != null)
-               tourStepFilesWithLines.add(String.format("%s:%s", step.getFile(), step.getLine()));
-
-            // cache it's label to be used more performant when needed
-            final String metaLabel = String.format("<strong>CodeTour</strong> <em>Step #%s of %s (%s)</em>",
-                  currentStepIndex, totalSteps, tour.getTitle());
-            stepMetaLabels.put(step.getTitle(), metaLabel);
-         }
-      });
-
-      // Validate them at most once in an hour
-      final LocalDateTime now = LocalDateTime.now();
-      if (now.isAfter(lastValidationTime.plusHours(1))) {
-         Validator.validateTours(project, tours);
-         lastValidationTime = now;
-      }
-
-      return tours;
-   }
-
-   private List<Tour> loadFromIndex(@NotNull Project project) {
-      return ReadAction.compute(() -> FilenameIndex.getAllFilesByExt(project, Props.TOUR_EXTENSION).stream()
-                  .map(virtualFile -> {
-                     Tour tour;
-                     try {
-                        LOG.info("Reading (from Index) Tour from file: " + virtualFile.getName());
-                        tour = GSON.fromJson(new InputStreamReader(virtualFile.getInputStream()), Tour.class);
-                     } catch (IOException e) {
-                        LOG.error("Skipping file: " + virtualFile.getName(), e);
-                        return null;
-                     }
-                     tour.setTitle(virtualFile.getName());
-                     return tour;
-                  })
-                  .filter(Objects::nonNull))
-            .collect(Collectors.toList());
-   }
-
-   private List<Tour> loadFromFS() {
-      final List<Tour> tours = new ArrayList<>();
-      final Optional<VirtualFile> toursDir = getToursDir();
-      if (toursDir.isEmpty()) return new ArrayList<>();
-
-      VfsUtilCore.iterateChildrenRecursively(toursDir.get(),
-            null,
-            fileOrDir -> {
-               if (!fileOrDir.isDirectory() && Props.TOUR_EXTENSION.equals(fileOrDir.getExtension()))
-                  parse(fileOrDir).ifPresent(tours::add);
-               return true;
+    /**
+     * Tries to find the corresponding file for the give tour, and if found it deletes it
+     *
+     * @param tour The tour to delete
+     * @return the deleted tour
+     */
+    public Tour deleteTour(Tour tour, boolean reload) {
+        findTourFile(tour).ifPresent(virtualFile -> {
+            WriteAction.runAndWait(() -> {
+                try {
+                    virtualFile.delete(this);
+                    if (reload)
+                        reloadState();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
             });
-      return tours;
-   }
+        });
+        return tour;
+    }
 
-   private Optional<Tour> parse(VirtualFile file) {
-      if (file.isDirectory())
-         return Optional.empty();
+    public List<Tour> reloadState() {
+        state.clear();
+        return getTours();
+    }
 
-      try {
-         LOG.info("Reading (from FS) Tour from file: " + file.getName());
-         return Optional.of(
-               GSON.fromJson(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8), Tour.class));
-      } catch (Exception e) {
-         LOG.error("Skipping file: " + file.getName(), e);
-      }
-      return Optional.empty();
-   }
+    public List<Tour> getTours() {
+        if (state.getTours().isEmpty())
+            state.getTours().addAll(loadTours(project));
+        return state.getTours();
+    }
 
-   private Optional<VirtualFile> findTourFile(Tour tour) {
-      final Optional<VirtualFile> toursDir = getToursDir();
-      if (toursDir.isEmpty()) return Optional.empty();
+    public boolean shouldNotify(Project project) {
+        return true;
+    }
 
-      final List<VirtualFile> virtualFiles = new ArrayList<>();
-      VfsUtilCore.iterateChildrenRecursively(toursDir.get(),
-            null,
-            fileOrDir -> {
-               if (!fileOrDir.isDirectory() && tour.getTourFile().equals(fileOrDir.getName()))
-                  virtualFiles.add(fileOrDir);
-               return true;
-            });
+    private List<Tour> loadTours(@NotNull Project project) {
+        List<Tour> list = getSpeciseTourList();
 
-      return virtualFiles.isEmpty() ? Optional.empty() : Optional.of(virtualFiles.get(0));
-   }
+        final List<Tour> tours = new ArrayList<>(list);
+        AppSettingsState settings = AppSettingsState.getInstance();
+        // Add the Onboarding Tour if configured
+        if (settings.isOnboardingAssistantOn()) {
+            final Tour onboardingTour = OnboardingAssistant.getInstance().getTour();
+            if (onboardingTour != null)
+                tours.add(onboardingTour);
+        }
 
-   private Optional<VirtualFile> findTourFile(String tourId) {
-      return getTours().stream()
-            .filter(tour -> tourId.equals(tour.getId()))
-            .findFirst()
-            .flatMap(tour -> findTourFile(tour));
-   }
+//      var userTours = project.getBasePath() == null ? loadFromIndex(project) : loadFromFS();
+        // 只通过索引找所有的指南文件
+        var userTours = loadFromIndex(project);
 
-   private Optional<VirtualFile> getToursDir() {
-      final VirtualFile virtualFile = ProjectUtil.guessProjectDir(project);
-      if (virtualFile == null) return Optional.empty();
+        // Sort User Tours. By default, they are sorted base on Title. Otherwise, it follows User Settings
+        Comparator<Tour> comparator = Comparator.comparing(Tour::getTitle);
+        switch (settings.getSortOption()) {
+            case FILENAME -> comparator = Comparator.comparing(Tour::getTourFile);
+            case CREATION_DATE ->
+                    comparator = Comparator.comparing(Tour::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()));
+        }
+        if (AppSettingsState.SortDirectionE.DESC.equals(settings.getSortDirection()))
+            comparator = comparator.reversed(); // ASC,DESC
+        LOG.info("Sorting Tours using: %s - %s".formatted(settings.getSortOption(), settings.getSortDirection()));
+        userTours.sort(comparator);
 
-      return Arrays.stream(virtualFile.getChildren())
-            .filter(file -> file.isDirectory() && file.getName().equals(Props.TOURS_DIR))
-            .findFirst();
-   }
+        tours.addAll(userTours);
+        // Cache some info
+        tourFileNames.clear();
+        tourTitles.clear();
+        tourStepFiles.clear();
+        tourStepFilesWithLines.clear();
+        stepMetaLabels.clear();
 
-   private Optional<VirtualFile> createToursDir() {
-      final VirtualFile virtualFile = ProjectUtil.guessProjectDir(project);
-      if (virtualFile == null) return Optional.empty();
+        tours.forEach(tour -> {
+            tourFileNames.add(tour.getTourFile());
+            tourTitles.add(tour.getTitle());
+            int currentStepIndex = 0;
+            final int totalSteps = tour.getSteps().size();
+            for (Step step : tour.getSteps()) {
+                currentStepIndex++;
+                tourStepFiles.add(step.getFile());
+                if (step.getFile() != null)
+                    tourStepFilesWithLines.add(String.format("%s:%s", step.getFile(), step.getLine()));
 
-      try {
-         virtualFile.createChildDirectory(this, Props.TOURS_DIR);
-      } catch (IOException e) {
-         LOG.error("Failed to create .tours Directory: " + e.getMessage(), e);
-         return Optional.empty();
-      }
+                // cache it's label to be used more performant when needed
+                final String metaLabel = String.format("<strong>CodeTour</strong> <em>Step #%s of %s (%s)</em>",
+                        currentStepIndex, totalSteps, tour.getTitle());
+                stepMetaLabels.put(step.getTitle(), metaLabel);
+            }
+        });
 
-      return getToursDir();
-   }
+        // Validate them at most once in an hour
+        final LocalDateTime now = LocalDateTime.now();
+        if (now.isAfter(lastValidationTime.plusHours(1))) {
+            Validator.validateTours(project, tours);
+            lastValidationTime = now;
+        }
 
-   public static Optional<Tour> getActiveTour() {
-      return activeTour;
-   }
+        return tours;
+    }
 
-   public static Optional<Integer> getActiveStepIndex() {
-      return activeStepIndex;
-   }
+    @NotNull
+    private List<Tour> getSpeciseTourList() {
+        Optional<VirtualFile> userWorkSpace = getUserWorkSpace();
+        if (userWorkSpace.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Optional<VirtualFile> userToursDir = Arrays.stream(userWorkSpace.get().getChildren())
+                .filter(file -> file.isDirectory() && file.getName().equals(Props.TOURS_DIR))
+                .findFirst();
 
-   /**
-    * Retrieves the Next Step of the currently active Tour. Also updates the activeStepIndex
-    */
-   public static Optional<Step> getNextStep() {
-      return getNextOrPrevStep(true);
-   }
+        return userToursDir.map(virtualFile -> Arrays.stream(virtualFile.getChildren())
+                .map(f -> {
+                    Tour tour;
+                    try {
+                        tour = GSON.fromJson(new InputStreamReader(f.getInputStream()), Tour.class);
+                        tour.setVirtualFile(f);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                    return tour;
+                }).toList()).orElse(Collections.emptyList());
+    }
 
-   /**
-    * Retrieves the Previous Step of the currently active Tour. Also updates the activeStepIndex
-    */
-   public static Optional<Step> getPrevStep() {
-      return getNextOrPrevStep(false);
-   }
+    private List<Tour> loadFromIndex(@NotNull Project project) {
+        return ReadAction.compute(() -> FilenameIndex.getAllFilesByExt(project, Props.TOUR_EXTENSION).stream()
+                        .map(virtualFile -> {
+                            Tour tour;
+                            try {
+                                LOG.info("Reading (from Index) Tour from file: " + virtualFile.getName());
+                                tour = GSON.fromJson(new InputStreamReader(virtualFile.getInputStream()), Tour.class);
+                            } catch (IOException e) {
+                                LOG.error("Skipping file: " + virtualFile.getName(), e);
+                                return null;
+                            }
+                            tour.setVirtualFile(virtualFile);
+                            return tour;
+                        })
+                        .filter(Objects::nonNull))
+                .collect(Collectors.toList());
+    }
 
-   public static boolean hasPrevStep() {
-      return hasNextOrPrevStep(false);
-   }
+    private List<Tour> loadFromFS() {
+        final List<Tour> tours = new ArrayList<>();
+        final Optional<VirtualFile> toursDir = getToursDir();
+        if (toursDir.isEmpty()) return new ArrayList<>();
 
-   public static boolean hasNextStep() {
-      return hasNextOrPrevStep(true);
-   }
+        VfsUtilCore.iterateChildrenRecursively(toursDir.get(),
+                null,
+                fileOrDir -> {
+                    if (!fileOrDir.isDirectory() && Props.TOUR_EXTENSION.equals(fileOrDir.getExtension()))
+                        parse(fileOrDir).ifPresent(tours::add);
+                    return true;
+                });
+        return tours;
+    }
 
-   private static boolean hasNextOrPrevStep(boolean next) {
-      final Optional<Tour> activeTour = getActiveTour();
-      if (activeTour.isEmpty()) return false;
+    private Optional<Tour> parse(VirtualFile file) {
+        if (file.isDirectory())
+            return Optional.empty();
 
-      final Optional<Integer> activeIndex = getActiveStepIndex();
-      if (activeIndex.isEmpty()) return false;
+        try {
+            LOG.info("Reading (from FS) Tour from file: " + file.getName());
+            return Optional.of(
+                    GSON.fromJson(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8), Tour.class));
+        } catch (Exception e) {
+            LOG.error("Skipping file: " + file.getName(), e);
+        }
+        return Optional.empty();
+    }
 
-      final int totalSteps = activeTour.get().getSteps().size();
-      final int candidateStep = next ? activeIndex.get() + 1 : activeIndex.get() - 1;
+    private Optional<VirtualFile> findTourFile(Tour tour) {
+        final Optional<VirtualFile> toursDir = getToursDir();
+        if (toursDir.isEmpty()) return Optional.empty();
 
-      // if candidate is in range, then it exists!
-      return candidateStep >= 0 && candidateStep < totalSteps;
-   }
+        final List<VirtualFile> virtualFiles = new ArrayList<>();
+        VfsUtilCore.iterateChildrenRecursively(toursDir.get(),
+                null,
+                fileOrDir -> {
+                    if (!fileOrDir.isDirectory() && tour.getTourFile().equals(fileOrDir.getName()))
+                        virtualFiles.add(fileOrDir);
+                    return true;
+                });
 
-   private static Optional<Step> getNextOrPrevStep(boolean next) {
-      final Optional<Tour> activeTour = getActiveTour();
-      if (activeTour.isEmpty()) return Optional.empty();
+        return virtualFiles.isEmpty() ? Optional.empty() : Optional.of(virtualFiles.get(0));
+    }
 
-      final Optional<Integer> activeIndex = getActiveStepIndex();
-      if (activeIndex.isEmpty()) return Optional.empty();
+    private Optional<VirtualFile> findTourFile(String tourId) {
+        return getTours().stream()
+                .filter(tour -> tourId.equals(tour.getId()))
+                .findFirst()
+                .flatMap(tour -> findTourFile(tour));
+    }
 
-      final int candidate = next ? activeIndex.get() + 1 : activeIndex.get() - 1;
-      if (candidate >= 0 && activeTour.get().getSteps().size() > candidate) {
-         setActiveStepIndex(candidate);
-         return Optional.of(activeTour.get().getSteps().get(candidate));
-      }
+    private Optional<VirtualFile> getUserWorkSpace() {
+        String sourcePath = AppSettingsState.getInstance().getSourcePath();
+        if (StringUtil.isEmpty(sourcePath)) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(VirtualFileManager.getInstance().findFileByNioPath(new File(sourcePath).toPath()));
+    }
 
-      return Optional.empty();
-   }
+    private Optional<VirtualFile> getToursDir() {
+        Optional<VirtualFile> toursDir = getUserWorkSpace();
+        if (toursDir.isEmpty()) {
+            toursDir = Optional.ofNullable(ProjectUtil.guessProjectDir(project));
+            if (toursDir.isEmpty()) {
+                return Optional.empty();
+            }
+        }
 
-   /**
-    * Tries to find the Step that is configured to navigate to the provided file and line, and if found,
-    * it activates its Tour and sets the step as active.
-    *
-    * @param fileName The file to which the Step is configured to navigate
-    * @param line     The line to which the Step is configured to navigate
-    * @return The Step (optional)
-    */
-   public Optional<Step> findStepByFileLine(String fileName, int line) {
-      final Optional<Tour> tourToActivate = getTours().stream()
-            .filter(tour -> tour.getSteps().stream()
-                  .filter(step -> step.getFile() != null)
-                  .anyMatch(step -> step.getFile().equals(fileName) && step.getLine() == line))
-            .findFirst();
-      if (tourToActivate.isEmpty()) return Optional.empty();
-      setActiveTour(tourToActivate.get());
+        return Arrays.stream(toursDir.get().getChildren())
+                .filter(file -> file.isDirectory() && file.getName().equals(Props.TOURS_DIR))
+                .findFirst();
+    }
 
-      final List<Step> steps = tourToActivate.get().getSteps();
-      for (int i = 0; i < steps.size(); i++) {
-         final Step step = steps.get(i);
-         if (step.getFile() != null && step.getFile().equals(fileName) && step.getLine() == line) {
-            setActiveStepIndex(i);
-            return Optional.of(step);
-         }
-      }
+    private Optional<VirtualFile> createToursDir() {
+        Optional<VirtualFile> toursDir = getUserWorkSpace();
+        if (toursDir.isEmpty()) {
+            toursDir = Optional.ofNullable(ProjectUtil.guessProjectDir(project));
+            if (toursDir.isEmpty()) {
+                return Optional.empty();
+            }
+        }
 
-      return Optional.empty();
-   }
+        try {
+            toursDir.get().createChildDirectory(this, Props.TOURS_DIR);
+        } catch (IOException e) {
+            LOG.error("Failed to create .tours Directory: " + e.getMessage(), e);
+            return Optional.empty();
+        }
 
-   public static void setActiveTour(Tour aTour) {
-      activeTour = Optional.ofNullable(aTour);
-   }
+        return getToursDir();
+    }
 
-   public static void setActiveStepIndex(Integer index) {
-      activeStepIndex = Optional.ofNullable(index);
-   }
+    public static Optional<Tour> getActiveTour() {
+        return activeTour;
+    }
 
-   public static boolean isFileIncludedInAnyStep(String fileName) {
-      return tourStepFiles.contains(fileName);
-   }
+    public static Optional<Integer> getActiveStepIndex() {
+        return activeStepIndex;
+    }
 
-   public static boolean isValidStep(String fileName, Integer line) {
-      return tourStepFilesWithLines.contains(String.format("%s:%s", fileName, line));
-   }
+    /**
+     * Retrieves the Next Step of the currently active Tour. Also updates the activeStepIndex
+     */
+    public static Optional<Step> getNextStep() {
+        return getNextOrPrevStep(true);
+    }
 
-   public static Optional<String> getStepMetaLabel(String stepTitle) {
-      if (stepMetaLabels.containsKey(stepTitle))
-         return Optional.of(stepMetaLabels.get(stepTitle));
-      return Optional.empty();
-   }
+    /**
+     * Retrieves the Previous Step of the currently active Tour. Also updates the activeStepIndex
+     */
+    public static Optional<Step> getPrevStep() {
+        return getNextOrPrevStep(false);
+    }
+
+    public static boolean hasPrevStep() {
+        return hasNextOrPrevStep(false);
+    }
+
+    public static boolean hasNextStep() {
+        return hasNextOrPrevStep(true);
+    }
+
+    private static boolean hasNextOrPrevStep(boolean next) {
+        final Optional<Tour> activeTour = getActiveTour();
+        if (activeTour.isEmpty()) return false;
+
+        final Optional<Integer> activeIndex = getActiveStepIndex();
+        if (activeIndex.isEmpty()) return false;
+
+        final int totalSteps = activeTour.get().getSteps().size();
+        final int candidateStep = next ? activeIndex.get() + 1 : activeIndex.get() - 1;
+
+        // if candidate is in range, then it exists!
+        return candidateStep >= 0 && candidateStep < totalSteps;
+    }
+
+    private static Optional<Step> getNextOrPrevStep(boolean next) {
+        final Optional<Tour> activeTour = getActiveTour();
+        if (activeTour.isEmpty()) return Optional.empty();
+
+        final Optional<Integer> activeIndex = getActiveStepIndex();
+        if (activeIndex.isEmpty()) return Optional.empty();
+
+        final int candidate = next ? activeIndex.get() + 1 : activeIndex.get() - 1;
+        if (candidate >= 0 && activeTour.get().getSteps().size() > candidate) {
+            setActiveStepIndex(candidate);
+            return Optional.of(activeTour.get().getSteps().get(candidate));
+        }
+
+        return Optional.empty();
+    }
+
+    /**
+     * Tries to find the Step that is configured to navigate to the provided file and line, and if found,
+     * it activates its Tour and sets the step as active.
+     *
+     * @param fileName The file to which the Step is configured to navigate
+     * @param line     The line to which the Step is configured to navigate
+     * @return The Step (optional)
+     */
+    public Optional<Step> findStepByFileLine(String fileName, int line) {
+        final Optional<Tour> tourToActivate = getTours().stream()
+                .filter(tour -> tour.getSteps().stream()
+                        .filter(step -> step.getFile() != null)
+                        .anyMatch(step -> step.getFile().equals(fileName) && step.getLine() == line))
+                .findFirst();
+        if (tourToActivate.isEmpty()) return Optional.empty();
+        setActiveTour(tourToActivate.get());
+
+        final List<Step> steps = tourToActivate.get().getSteps();
+        for (int i = 0; i < steps.size(); i++) {
+            final Step step = steps.get(i);
+            if (step.getFile() != null && step.getFile().equals(fileName) && step.getLine() == line) {
+                setActiveStepIndex(i);
+                return Optional.of(step);
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    public static void setActiveTour(Tour aTour) {
+        activeTour = Optional.ofNullable(aTour);
+    }
+
+    public static void setActiveStepIndex(Integer index) {
+        activeStepIndex = Optional.ofNullable(index);
+    }
+
+    public static boolean isFileIncludedInAnyStep(String fileName) {
+        return tourStepFiles.contains(fileName);
+    }
+
+    public static boolean isValidStep(String fileName, Integer line) {
+        return tourStepFilesWithLines.contains(String.format("%s:%s", fileName, line));
+    }
+
+    public static Optional<String> getStepMetaLabel(String stepTitle) {
+        if (stepMetaLabels.containsKey(stepTitle))
+            return Optional.of(stepMetaLabels.get(stepTitle));
+        return Optional.empty();
+    }
 
 }
