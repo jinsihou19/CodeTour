@@ -16,6 +16,7 @@ import org.uom.lefterisxris.codetour.tours.ui.CodeTourNotifier;
 
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 /**
@@ -27,69 +28,73 @@ import java.util.stream.Collectors;
  */
 public class Navigator {
 
-   public static void navigate(@NotNull Step step, @NotNull Project project) {
-      if (project.getBasePath() == null) return;
+    public static void navigate(@NotNull Step step, @NotNull Project project) {
+        navigate(step, project, Navigator::renderStepPopup);
+    }
 
-      SlowOperations.allowSlowOperations(() -> {
+    public static void navigate(@NotNull Step step, @NotNull Project project, BiConsumer<Step, Project> renderStep) {
+        if (project.getBasePath() == null) return;
 
-         if (step.getFile() == null) {
-            // Nothing more to do. Just show Step's popup and return
-            renderStepPopup(step, project);
-            return;
-         }
+        SlowOperations.allowSlowOperations(() -> {
 
-         // Try finding the appropriate file to navigate to
-         final String stepFileName = Paths.get(step.getFile()).getFileName().toString();
-         final List<VirtualFile> validVirtualFiles = FilenameIndex
-               .getVirtualFilesByName(stepFileName, GlobalSearchScope.projectScope(project)).stream()
-               .filter(file -> Utils.isFileMatchesStep(file, step))
-               .collect(Collectors.toList());
+            if (step.getFile() == null) {
+                // Nothing more to do. Just show Step's popup and return
+                renderStep.accept(step, project);
+                return;
+            }
 
-         if (validVirtualFiles.isEmpty()) {
-            // Case for configured but not found file
-            CodeTourNotifier.error(project, String.format("Could not locate navigation target '%s' for Step '%s'",
-                  step.getFile(), step.getTitle()));
-         } else if (validVirtualFiles.size() > 1) {
-            // In case there is more than one file that matches with the Step, prompt User to pick the appropriate one
-            final String prompt = "More Than One Target File Found! Select the One You Want to Navigate to:";
-            JBPopupFactory.getInstance()
-                  .createListPopup(new BaseListPopupStep<>(prompt, validVirtualFiles) {
-                     @Override
-                     public @Nullable PopupStep<?> onChosen(VirtualFile selectedValue, boolean finalChoice) {
+            // Try finding the appropriate file to navigate to
+            final String stepFileName = Paths.get(step.getFile()).getFileName().toString();
+            final List<VirtualFile> validVirtualFiles = FilenameIndex
+                    .getVirtualFilesByName(stepFileName, GlobalSearchScope.projectScope(project)).stream()
+                    .filter(file -> Utils.isFileMatchesStep(file, step))
+                    .collect(Collectors.toList());
 
-                        navigate(step, project, selectedValue);
+            if (validVirtualFiles.isEmpty()) {
+                // Case for configured but not found file
+                CodeTourNotifier.error(project, String.format("Could not locate navigation target '%s' for Step '%s'",
+                        step.getFile(), step.getTitle()));
+            } else if (validVirtualFiles.size() > 1) {
+                // In case there is more than one file that matches with the Step, prompt User to pick the appropriate one
+                final String prompt = "More Than One Target File Found! Select the One You Want to Navigate to:";
+                JBPopupFactory.getInstance()
+                        .createListPopup(new BaseListPopupStep<>(prompt, validVirtualFiles) {
+                            @Override
+                            public @Nullable PopupStep<?> onChosen(VirtualFile selectedValue, boolean finalChoice) {
 
-                        // Show a Popup
-                        renderStepPopup(step, project);
+                                navigate(step, project, selectedValue);
 
-                        return super.onChosen(selectedValue, finalChoice);
-                     }
-                  }).showInFocusCenter();
+                                // Show a Popup
+                                renderStep.accept(step, project);
 
-            // Notify user to be more specific
-            CodeTourNotifier.warn(project, "Tip: A Step's file path can be more specific either by having a " +
-                  "relative path ('file' property) or by setting the 'directory' property on Step's definition");
-            return; // Make sure we return here, because PopUp runs on another Thread (no wait for User input)
-         } else {
-            // Case for exactly one match. Just use it
-            navigate(step, project, validVirtualFiles.get(0));
-         }
+                                return super.onChosen(selectedValue, finalChoice);
+                            }
+                        }).showInFocusCenter();
 
-         // Show Step's popup and return
-         renderStepPopup(step, project);
-      });
-   }
+                // Notify user to be more specific
+                CodeTourNotifier.warn(project, "Tip: A Step's file path can be more specific either by having a " +
+                        "relative path ('file' property) or by setting the 'directory' property on Step's definition");
+                return; // Make sure we return here, because PopUp runs on another Thread (no wait for User input)
+            } else {
+                // Case for exactly one match. Just use it
+                navigate(step, project, validVirtualFiles.get(0));
+            }
 
-   private static void navigate(@NotNull Step step, @NotNull Project project, VirtualFile targetVirtualFile) {
-      final int line = step.getLine() != null ? step.getLine() - 1 : 0;
-      new OpenFileDescriptor(project, targetVirtualFile, Math.max(line, 0), 1)
-            .navigate(true);
-   }
+            // Show Step's popup and return
+            renderStep.accept(step, project);
+        });
+    }
 
-   private static void renderStepPopup(@NotNull Step step, @NotNull Project project) {
-      // Show a Popup
-      final StepRenderer renderer = StepRenderer.getInstance(step, project);
-      renderer.show();
-   }
+    private static void navigate(@NotNull Step step, @NotNull Project project, VirtualFile targetVirtualFile) {
+        final int line = step.getLine() != null ? step.getLine() - 1 : 0;
+        new OpenFileDescriptor(project, targetVirtualFile, Math.max(line, 0), 1)
+                .navigate(true);
+    }
+
+    private static void renderStepPopup(@NotNull Step step, @NotNull Project project) {
+        // Show a Popup
+        final StepRenderer renderer = StepRenderer.getInstance(step, project);
+        renderer.show();
+    }
 
 }

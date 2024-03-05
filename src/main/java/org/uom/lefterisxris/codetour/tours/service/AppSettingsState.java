@@ -29,6 +29,7 @@ public class AppSettingsState implements PersistentStateComponent<AppSettingsSta
    private boolean onboardingAssistant = true;
    private SortOptionE sortOption = SortOptionE.TITLE;
    private SortDirectionE sortDirection = SortDirectionE.ASC;
+   private String sourcePath = "";
 
    public static AppSettingsState getInstance() {
       return ApplicationManager.getApplication().getService(AppSettingsState.class);
