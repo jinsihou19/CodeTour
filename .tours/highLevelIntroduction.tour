@@ -42,7 +42,7 @@
     },
     {
       "title": "Tours StateManager",
-      "description": "# Tours StateManager\n\nStateManager is the class responsible for implementing all the **CRUD** operations for Tours and their Steps.\n\nThe following are implemented here:\n\n- Load Tours from source files\n- Create/Edit/Delete a Tour\n- Create/Edit/Delete a Tour Step\n- Hold info ( **static**) about the active Tour\n- Some Validation methods",
+      "description": "# Tours StateManager\n\nStateManager is the class responsible for implementing all the **CRUD** operations for Tours and their Steps.\n\nThe following are implemented here:\n\n- Load Tours from source files\n- Create/Edit/Delete a Tour\n- Create/Edit/Delete a Tour Step\n- Hold info ( **static**) about the active Tour\n- Some Validation methods\n\n\n```mermaid\ngraph TD;\nA--\u003eB;\nA--\u003eC;\nB--\u003eD;\nC--\u003eD;\n```",
       "file": "StateManager.java",
       "line": 32
     },

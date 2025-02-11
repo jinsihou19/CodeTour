@@ -6,6 +6,7 @@ import com.intellij.openapi.wm.ToolWindowFactory;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import org.jetbrains.annotations.NotNull;
+import org.uom.lefterisxris.codetour.tours.state.StateManager;
 
 /**
  * Factory class to generate the related Tool Pane Window
@@ -19,6 +20,7 @@ public class ToolPaneWindowFactory implements ToolWindowFactory {
    @Override
    public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
 
+      StateManager.getInstance().registerProject(project);
       final ToolPaneWindow toursNavigationWindow = new ToolPaneWindow(project, toolWindow);
       final ContentFactory contentFactory = ContentFactory.getInstance();
       final Content content =

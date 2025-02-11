@@ -95,7 +95,7 @@ public class StepEditor extends DialogWrapper {
 
    private JComponent createPreviewPanel() {
       stepDoc = renderFullDoc(
-            StateManager.getStepMetaLabel(titleTextField.getText()).orElse(titleTextField.getText()),
+            StateManager.getInstance().getState(project).getStepMetaLabel(titleTextField.getText()).orElse(titleTextField.getText()),
             descriptionTextArea.getText(),
             referenceTextField.getText());
 
@@ -113,7 +113,7 @@ public class StepEditor extends DialogWrapper {
 
    private void updatePreviewComponent() {
       stepDoc = renderFullDoc(
-            StateManager.getStepMetaLabel(titleTextField.getText()).orElse(titleTextField.getText()),
+            StateManager.getInstance().getState(project).getStepMetaLabel(titleTextField.getText()).orElse(titleTextField.getText()),
             descriptionTextArea.getText(),
             referenceTextField.getText());
       previewComponent.setData(null, stepDoc, null, null, null);

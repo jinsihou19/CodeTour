@@ -20,7 +20,7 @@ public class NavigatePrevStepAction extends AnAction {
       final Project project = e.getProject();
       if (project == null) return;
 
-      StateManager.getPrevStep().ifPresent(step -> {
+      StateManager.getInstance().getState(project).getPrevStep().ifPresent(step -> {
          // Notify UI to select the step which will trigger its navigation
          project.getMessageBus().syncPublisher(StepSelectionNotifier.TOPIC).selectStep(step);
       });

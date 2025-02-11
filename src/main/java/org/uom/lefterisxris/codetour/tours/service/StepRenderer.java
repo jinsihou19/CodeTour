@@ -65,7 +65,7 @@ public class StepRenderer extends DialogWrapper {
    private JComponent getComponent() {
 
       final String stepDoc = renderFullDoc(
-            StateManager.getStepMetaLabel(step.getTitle()).orElse("Step " + step.getTitle()),
+            StateManager.getInstance().getState(project).getStepMetaLabel(step.getTitle()).orElse("Step " + step.getTitle()),
             step.getDescription(),
             step.getFile() != null ? String.format("%s:%s", step.getFile(), step.getLine()) : "");
 
@@ -87,7 +87,7 @@ public class StepRenderer extends DialogWrapper {
          @Override
          public void mouseReleased(MouseEvent e) {
             if (!navigationButtons) return;
-            StateManager.getPrevStep().ifPresent(step -> {
+            StateManager.getInstance().getState(project).getPrevStep().ifPresent(step -> {
                // Notify UI to select the step which will trigger its navigation
                project.getMessageBus().syncPublisher(StepSelectionNotifier.TOPIC).selectStep(step);
             });
@@ -102,7 +102,7 @@ public class StepRenderer extends DialogWrapper {
          @Override
          public void mouseReleased(MouseEvent e) {
             if (!navigationButtons) return;
-            StateManager.getNextStep().ifPresent(step -> {
+            StateManager.getInstance().getState(project).getNextStep().ifPresent(step -> {
                // Notify UI to select the step which will trigger its navigation
                project.getMessageBus().syncPublisher(StepSelectionNotifier.TOPIC).selectStep(step);
             });
@@ -112,8 +112,8 @@ public class StepRenderer extends DialogWrapper {
       buttons.add(nextStepButton);
 
       // Buttons should be disabled properly (e.g. for preview mode)
-      previousStepButton.setEnabled(StateManager.hasPrevStep());
-      nextStepButton.setEnabled(StateManager.hasNextStep());
+      previousStepButton.setEnabled(StateManager.getInstance().getState(project).hasPrevStep());
+      nextStepButton.setEnabled(StateManager.getInstance().getState(project).hasNextStep());
 
       dialogPanel.add(buttons, BorderLayout.SOUTH);
       dialogPanel.setPreferredSize(new Dimension(320, 160));

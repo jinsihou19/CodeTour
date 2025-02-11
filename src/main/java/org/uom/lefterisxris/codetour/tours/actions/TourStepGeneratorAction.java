@@ -40,19 +40,18 @@ public class TourStepGeneratorAction extends AnAction {
       if (virtualFile == null)
          return;
 
-      final StateManager stateManager = new StateManager(project);
 
       // If no activeTour is present, prompt to select one
-      if (StateManager.getActiveTour().isEmpty()) {
+      if (StateManager.getInstance().getState(project).getActiveTour().isEmpty()) {
          final TourSelectionDialogWrapper dialog = new TourSelectionDialogWrapper(project,
                "Please Select the Tour to add the Step to");
          if (dialog.showAndGet()) {
             final Optional<Tour> selected = dialog.getSelected();
-            selected.ifPresent(tour -> StateManager.setActiveTour(tour));
+            selected.ifPresent(StateManager.getInstance().getState(project)::setActiveTour);
          }
       }
 
-      final Optional<Tour> activeTour = StateManager.getActiveTour();
+      final Optional<Tour> activeTour = StateManager.getInstance().getState(project).getActiveTour();
       if (activeTour.isPresent()) {
          final Step step = generateStep(virtualFile, line);
 
@@ -63,7 +62,7 @@ public class TourStepGeneratorAction extends AnAction {
 
          final Step updatedStep = stepEditor.getUpdatedStep();
          activeTour.get().getSteps().add(updatedStep);
-         stateManager.updateTour(activeTour.get());
+         StateManager.getInstance().getState(project).updateTour(activeTour.get());
 
          // Notify UI to re-render
          project.getMessageBus().syncPublisher(TourUpdateNotifier.TOPIC).tourUpdated(activeTour.get());
