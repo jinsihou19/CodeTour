@@ -19,11 +19,11 @@ import static org.uom.lefterisxris.codetour.tours.domain.OnboardingAssistant.ONB
  */
 public class TourSelectionDialogWrapper extends DialogWrapper {
 
-   private final Project project;
    private Optional<Tour> selected = Optional.empty();
+   private final Project project;
 
    public TourSelectionDialogWrapper(Project project, String title) {
-      super(true); // use current window as parent
+      super(true);
       this.project = project;
       setTitle(title);
       init();
@@ -33,8 +33,7 @@ public class TourSelectionDialogWrapper extends DialogWrapper {
    protected @Nullable JComponent createCenterPanel() {
       JPanel dialogPanel = new JPanel(new BorderLayout());
 
-      final StateManager stateManager = new StateManager(project);
-      var tours = stateManager.getTours();
+      var tours = StateManager.getInstance().getState(project).getTours();
 
       // Onboarding Assistant should not be present in this selection
       tours.removeIf(tour -> ONBOARD_ASSISTANT_TITLE.equals(tour.getTitle()));

@@ -20,7 +20,7 @@ public class NavigateNextStepAction extends AnAction {
       final Project project = e.getProject();
       if (project == null) return;
 
-      StateManager.getNextStep().ifPresent(step -> {
+      StateManager.getInstance().getState(project).getNextStep().ifPresent(step -> {
          // Notify UI to select the step which will trigger its navigation
          project.getMessageBus().syncPublisher(StepSelectionNotifier.TOPIC).selectStep(step);
       });

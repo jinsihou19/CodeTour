@@ -5,6 +5,7 @@ import com.intellij.codeInsight.daemon.LineMarkerInfo;
 import com.intellij.codeInsight.daemon.LineMarkerProviderDescriptor;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.markup.GutterIconRenderer;
+import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
@@ -34,24 +35,25 @@ public class TourLineMarkerProvider extends LineMarkerProviderDescriptor {
    @Override
    public LineMarkerInfo<?> getLineMarkerInfo(@NotNull PsiElement element) {
       final PsiFile containingFile = element.getContainingFile();
+      final Project project = element.getProject();
 
       if (element instanceof LeafPsiElement && containingFile != null &&
-            StateManager.isFileIncludedInAnyStep(containingFile.getName())) {
-         final Document document = PsiDocumentManager.getInstance(element.getProject()).getDocument(containingFile);
+            StateManager.getInstance().getState(project).isFileIncludedInAnyStep(containingFile.getName())) {
+         final Document document = PsiDocumentManager.getInstance(project).getDocument(containingFile);
          if (document != null) {
             final int lineNumber = document.getLineNumber(element.getTextOffset()) + 1;
             final String fileLine = String.format("%s:%s", containingFile.getName(), lineNumber);
-            if (StateManager.isValidStep(containingFile.getName(), lineNumber)) {
+            if (StateManager.getInstance().getState(project).isValidStep(containingFile.getName(), lineNumber)) {
                if (!markedLines.containsKey(fileLine) || element.equals(markedLines.get(fileLine))) {
                   markedLines.put(fileLine, element);
                   return new LineMarkerInfo<>(element, element.getTextRange(),
                         CodeTourIcons.STEP,
                         psiElement -> "Code Tour Step",
                         (e, elt) -> {
-                           new StateManager(element.getProject()).findStepByFileLine(containingFile.getName(),
+                           StateManager.getInstance().getState(project).findStepByFileLine(containingFile.getName(),
                                  lineNumber).ifPresent(step -> {
                               // Notify UI to select the step which will trigger its navigation
-                              element.getProject().getMessageBus().syncPublisher(StepSelectionNotifier.TOPIC)
+                              project.getMessageBus().syncPublisher(StepSelectionNotifier.TOPIC)
                                     .selectStep(step);
                            });
                         },
