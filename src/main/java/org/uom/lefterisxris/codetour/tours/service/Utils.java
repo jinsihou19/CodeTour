@@ -99,7 +99,7 @@ public class Utils {
    public static String mdToHtml(String markdown) {
       final MarkdownFlavourDescriptor flavour = new GFMFlavourDescriptor();
       final ASTNode parsedTree = new MarkdownParser(flavour).buildMarkdownTreeFromString(markdown);
-      return new HtmlGenerator(markdown, parsedTree, flavour, false).generateHtml(TAG_RENDERER);
+      return new HtmlGenerator(markdown, parsedTree, flavour, true).generateHtml(TAG_RENDERER);
    }
 
    public static boolean isFileMatchesStep(VirtualFile file, @NotNull Step step) {

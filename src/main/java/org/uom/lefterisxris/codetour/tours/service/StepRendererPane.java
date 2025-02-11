@@ -35,8 +35,7 @@ public class StepRendererPane extends JPanel {
     private JComponent getOldComponent() {
 
         final String stepDoc = renderFullDoc(
-                StateManager.getInstance().getState(project)
-                        .getStepMetaLabel(step.getTitle()).orElse("Step " + step.getTitle()),
+                StateManager.getInstance().getState(project).getStepMetaLabel(step.getTitle()),
                 step.getDescription(),
                 step.getFile() != null ? String.format("%s:%s", step.getFile(), step.getLine()) : "");
 

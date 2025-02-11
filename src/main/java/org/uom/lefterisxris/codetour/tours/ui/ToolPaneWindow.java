@@ -35,6 +35,7 @@ import org.uom.lefterisxris.codetour.tours.service.Utils;
 import org.uom.lefterisxris.codetour.tours.state.StateManager;
 import org.uom.lefterisxris.codetour.tours.state.StepSelectionNotifier;
 import org.uom.lefterisxris.codetour.tours.state.TourUpdateNotifier;
+import org.uom.lefterisxris.codetour.tours.state.ToursState;
 
 import javax.swing.Icon;
 import javax.swing.JButton;
@@ -105,10 +106,11 @@ public class ToolPaneWindow {
      * Handle plugin messaging
      */
     public void registerMessageBusListener() {
+        ToursState state = StateManager.getInstance().getState(project);
         project.getMessageBus().connect().subscribe(TourUpdateNotifier.TOPIC, (TourUpdateNotifier) (tour) -> {
-            StateManager.getInstance().getState(project).reloadState();
+            state.reloadState();
+            createOrUpdateContent(tour.getStep(state.getActiveStepIndex()), project);
             updateToursTree();
-            selectTourLastStep(tour);
         });
 
         project.getMessageBus().connect().subscribe(StepSelectionNotifier.TOPIC, (StepSelectionNotifier) (step) -> {
@@ -116,7 +118,7 @@ public class ToolPaneWindow {
                 if (!toolWindow.isVisible()) {
                     toolWindow.show();
                 }
-                selectTourStep(tour, StateManager.getInstance().getState(project).getActiveStepIndex());
+                selectTourStep(tour, state.getActiveStepIndex());
             });
         });
     }
@@ -431,9 +433,10 @@ public class ToolPaneWindow {
         newTour.setTourFile(updatedFilename);
 
         StateManager.getInstance().getState(project).createTour(project, newTour);
-        updateToursTree();
+        project.getMessageBus().syncPublisher(TourUpdateNotifier.TOPIC).tourUpdated(newTour);
         CodeTourNotifier.notifyTourAction(project, newTour, "Creation",
                 String.format("Tour '%s' (file %s) has been created", newTour.getTitle(), newTour.getTourFile()));
+
     }
 
     //region Tour Context menu actions
@@ -514,7 +517,6 @@ public class ToolPaneWindow {
 
     private void deleteTourListener(Tour tour) {
         StateManager.getInstance().getState(project).deleteTour(tour);
-        updateToursTree();
         CodeTourNotifier.notifyTourAction(project, tour, "Deletion", String.format("Tour " +
                 "'%s' (file %s) has been deleted", tour.getTitle(), tour.getTourFile()));
     }
@@ -533,9 +535,9 @@ public class ToolPaneWindow {
         tour.getSteps().set(index, updatedStep);
 
         StateManager.getInstance().getState(project).updateTour(tour);
-        updateToursTree();
         CodeTourNotifier.notifyTourAction(project, tour, "Step Update",
                 String.format("Step '%s' has been updated", step.getTitle()));
+        project.getMessageBus().syncPublisher(TourUpdateNotifier.TOPIC).tourUpdated(tour);
 
         // Expand and select the Step on the tree
         selectTourStep(tour, index, false);
@@ -566,7 +568,7 @@ public class ToolPaneWindow {
         updateToursTree();
         CodeTourNotifier.notifyTourAction(project, tour, "Step Deletion", String.format("Step " +
                 "'%s' has been removed from Tour '%s'", step.getTitle(), tour.getTitle()));
-
+        project.getMessageBus().syncPublisher(TourUpdateNotifier.TOPIC).tourUpdated(tour);
         // Expand and select a Step on the tree (on the same index)
         selectTourStep(tour, Math.min(tour.getSteps().size() - 1, index), false);
     }
@@ -600,7 +602,7 @@ public class ToolPaneWindow {
                 final DefaultMutableTreeNode pNode = (DefaultMutableTreeNode) component;
                 if (pNode.getUserObject() instanceof Tour) {
                     toursTree.expandPath(new TreePath(pNode.getPath()));
-                    if (activeStepIndex > 0 && activeStepIndex < toursTree.getRowCount()) {
+                    if (activeStepIndex >= 0 && activeStepIndex < toursTree.getRowCount()) {
                         // If activeIndex is provided, select it
                         final DefaultMutableTreeNode stepNodeToSelect =
                                 (DefaultMutableTreeNode) pNode.getChildAt(activeStepIndex);
