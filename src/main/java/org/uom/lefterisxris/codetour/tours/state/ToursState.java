@@ -261,7 +261,7 @@ public class ToursState {
                 .map(f -> {
                     Tour tour;
                     try {
-                        tour = GSON.fromJson(new InputStreamReader(f.getInputStream()), Tour.class);
+                        tour = GSON.fromJson(new InputStreamReader(f.getInputStream(), StandardCharsets.UTF_8), Tour.class);
                         tour.setVirtualFile(f);
                     } catch (IOException e) {
                         throw new RuntimeException(e);
@@ -276,7 +276,7 @@ public class ToursState {
                             Tour tour;
                             try {
                                 LOG.info("Reading (from Index) Tour from file: " + virtualFile.getName());
-                                tour = GSON.fromJson(new InputStreamReader(virtualFile.getInputStream()), Tour.class);
+                                tour = GSON.fromJson(new InputStreamReader(virtualFile.getInputStream(), StandardCharsets.UTF_8), Tour.class);
                             } catch (IOException e) {
                                 LOG.error("Skipping file: " + virtualFile.getName(), e);
                                 return null;
