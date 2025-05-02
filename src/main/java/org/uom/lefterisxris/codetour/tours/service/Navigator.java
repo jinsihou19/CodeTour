@@ -6,6 +6,10 @@ import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.openapi.ui.popup.PopupStep;
 import com.intellij.openapi.ui.popup.util.BaseListPopupStep;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.pom.Navigatable;
+import com.intellij.psi.JavaPsiFacade;
+import com.intellij.psi.PsiClass;
+import com.intellij.psi.PsiMethod;
 import com.intellij.psi.search.FilenameIndex;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.util.SlowOperations;
@@ -28,17 +32,12 @@ import java.util.stream.Collectors;
  */
 public class Navigator {
 
-    public static void navigate(@NotNull Step step, @NotNull Project project) {
-        navigate(step, project, Navigator::renderStepPopup);
-    }
-
-    public static void navigate(@NotNull Step step, @NotNull Project project, BiConsumer<Step, Project> renderStep) {
+    public static void navigateLine(@NotNull Step step, @NotNull Project project, BiConsumer<Step, Project> renderStep) {
         if (project.getBasePath() == null) return;
 
         SlowOperations.allowSlowOperations(() -> {
 
             if (step.getFile() == null) {
-                // Nothing more to do. Just show Step's popup and return
                 renderStep.accept(step, project);
                 return;
             }
@@ -62,7 +61,7 @@ public class Navigator {
                             @Override
                             public @Nullable PopupStep<?> onChosen(VirtualFile selectedValue, boolean finalChoice) {
 
-                                navigate(step, project, selectedValue);
+                                navigateLine(step, project, selectedValue);
 
                                 // Show a Popup
                                 renderStep.accept(step, project);
@@ -77,7 +76,7 @@ public class Navigator {
                 return; // Make sure we return here, because PopUp runs on another Thread (no wait for User input)
             } else {
                 // Case for exactly one match. Just use it
-                navigate(step, project, validVirtualFiles.get(0));
+                navigateLine(step, project, validVirtualFiles.get(0));
             }
 
             // Show Step's popup and return
@@ -85,16 +84,79 @@ public class Navigator {
         });
     }
 
-    private static void navigate(@NotNull Step step, @NotNull Project project, VirtualFile targetVirtualFile) {
+    private static void navigateLine(@NotNull Step step, @NotNull Project project, VirtualFile targetVirtualFile) {
         final int line = step.getLine() != null ? step.getLine() - 1 : 0;
         new OpenFileDescriptor(project, targetVirtualFile, Math.max(line, 0), 1)
                 .navigate(true);
     }
 
-    private static void renderStepPopup(@NotNull Step step, @NotNull Project project) {
-        // Show a Popup
-        final StepRenderer renderer = StepRenderer.getInstance(step, project);
-        renderer.show();
+    public static void navigateCode(@NotNull String navigateUrl, @NotNull Project project) {
+        String url = navigateUrl;
+        if (navigateUrl.startsWith("navigate://")) {
+            url = navigateUrl.substring("navigate://".length());
+        }
+        if (url.contains("#")) {
+            navigateMethod(url, project);
+        } else {
+            navigateLine(url, project);
+        }
+    }
+
+    /**
+     * 导航到指定的类和方法
+     */
+    private static void navigateToMethod(String className, String methodName, @NotNull Project project) {
+        PsiClass psiClass = JavaPsiFacade.getInstance(project)
+                .findClass(className, GlobalSearchScope.allScope(project));
+
+        if (psiClass != null) {
+            for (PsiMethod method : psiClass.getMethods()) {
+                if (method.getName().equals(methodName)) {
+                    Navigatable navigatable = (Navigatable) method.getNavigationElement();
+                    if (navigatable.canNavigate()) {
+                        navigatable.navigate(true);
+                    }
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     * 导航代码形如 "MyClass#myMethod"
+     *
+     * @param navigateUrl 导航url
+     * @param project     工程
+     */
+    public static void navigateMethod(@NotNull String navigateUrl, @NotNull Project project) {
+
+        String[] parts = navigateUrl.split("#");
+        if (parts.length == 2) {
+            String className = parts[0];
+            String methodName = parts[1];
+            navigateToMethod(className, methodName, project);
+        }
+    }
+
+    /**
+     * 导航代码形如 "MyJava.java:1"
+     *
+     * @param navigateUrl 导航url
+     * @param project     工程
+     */
+    public static void navigateLine(@NotNull String navigateUrl, @NotNull Project project) {
+        String fileName = navigateUrl;
+        int line = 0;
+        if (navigateUrl.contains(":")) {
+            fileName = navigateUrl.substring(0, navigateUrl.indexOf(":"));
+            line = Integer.parseInt(navigateUrl.substring(navigateUrl.indexOf(":") + 1));
+        }
+
+        final List<VirtualFile> validVirtualFiles = FilenameIndex
+                .getVirtualFilesByName(fileName, GlobalSearchScope.projectScope(project)).stream()
+                .toList();
+        new OpenFileDescriptor(project, validVirtualFiles.get(0), Math.max(line - 1, 0), 1)
+                .navigate(true);
     }
 
 }

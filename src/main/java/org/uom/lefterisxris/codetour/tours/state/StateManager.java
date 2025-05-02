@@ -43,6 +43,10 @@ public class StateManager {
      * @return ToursState
      */
     public ToursState getState(Project project) {
+        // 首次绑定
+        if (stateMap.get(project) == null) {
+            stateMap.putIfAbsent(project, new ToursState(project));
+        }
         return stateMap.get(project);
     }
 

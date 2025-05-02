@@ -109,8 +109,10 @@ public class ToolPaneWindow {
         ToursState state = StateManager.getInstance().getState(project);
         project.getMessageBus().connect().subscribe(TourUpdateNotifier.TOPIC, (TourUpdateNotifier) (tour) -> {
             state.reloadState();
-            createOrUpdateContent(tour.getStep(state.getActiveStepIndex()), project);
             updateToursTree();
+            if (state.getActiveStepIndex() != -1) {
+                createOrUpdateContent(tour.getStep(state.getActiveStepIndex()), project);
+            }
         });
 
         project.getMessageBus().connect().subscribe(StepSelectionNotifier.TOPIC, (StepSelectionNotifier) (step) -> {
@@ -394,7 +396,7 @@ public class ToolPaneWindow {
         final int index = parentNode.getIndex(node);
         if (index >= 0)
             StateManager.getInstance().getState(project).setActiveStepIndex(index);
-        Navigator.navigate(step, project, this::createOrUpdateContent);
+        Navigator.navigateLine(step, project, this::createOrUpdateContent);
     }
     //endregion
 
@@ -609,7 +611,7 @@ public class ToolPaneWindow {
                         toursTree.getSelectionModel().setSelectionPath(new TreePath(stepNodeToSelect.getPath()));
                         // Also navigate to that step (if set)
                         if (navigate)
-                            Navigator.navigate((Step) stepNodeToSelect.getUserObject(), project, this::createOrUpdateContent);
+                            Navigator.navigateLine((Step) stepNodeToSelect.getUserObject(), project, this::createOrUpdateContent);
                     } else {
                         // otherwise, select the last step of the tour Node, and update the selected step index
                         toursTree.getSelectionModel().setSelectionPath(new TreePath(pNode.getLastLeaf().getPath()));

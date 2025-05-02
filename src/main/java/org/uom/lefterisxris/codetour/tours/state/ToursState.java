@@ -117,9 +117,15 @@ public class ToursState {
     }
 
     public String getStepMetaLabel(String stepTitle) {
-        Tour tour = activeTour.get();
-        return String.format("<strong>CodeTour</strong> <em>Step #%s of %s (%s)</em>",
-                activeStepIndex + 1, tour.getSteps().size(), tour.getTitle());
+        if (activeTour.isPresent()) {
+            Tour tour = activeTour.get();
+            return String.format("<strong>CodeTour</strong> <em>Step #%s of %s (%s)</em>",
+                    activeStepIndex + 1, tour.getSteps().size(), stepTitle);
+        } else {
+            return String.format("<strong>CodeTour</strong> <em>Step #%s (%s)</em>",
+                    activeStepIndex + 1, stepTitle);
+        }
+
     }
 
     private List<Tour> loadTours(@NotNull Project project) {
@@ -130,10 +136,13 @@ public class ToursState {
             if (onboardingTour != null)
                 tours.add(onboardingTour);
         }
-
+        
         // 只通过索引找所有的指南文件
-        var userTours = new ArrayList<>(getSpeciseTourList());
-//        var userTours = loadFromIndex(project);
+        var userTours = loadFromIndex(project);
+        if (userTours.isEmpty()) {
+            // 通过猜测工程再找一次
+            userTours = new ArrayList<>(getSpeciseTourList());
+        }
 
         // Sort User Tours. By default, they are sorted base on Title. Otherwise, it follows User Settings
         Comparator<Tour> comparator = Comparator.comparing(Tour::getTitle);
@@ -258,6 +267,7 @@ public class ToursState {
         }
 
         return userWorkSpace.map(virtualFile -> Arrays.stream(virtualFile.getChildren())
+                .filter(f -> f.getName().endsWith(".tour"))
                 .map(f -> {
                     Tour tour;
                     try {

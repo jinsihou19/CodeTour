@@ -119,7 +119,7 @@ dependencies {
     // https://mvnrepository.com/artifact/org.projectlombok/lombok
     compileOnly("org.projectlombok:lombok:1.18.22")
     annotationProcessor("org.projectlombok:lombok:1.18.22")
-
-    testCompileOnly("org.projectlombok:lombok:1.18.22")
+    testImplementation("org.mockito:mockito-core:5.15.2")
+//    testImplementation("org.junit.jupiter:junit-jupiter")
     testAnnotationProcessor("org.projectlombok:lombok:1.18.22")
 }
