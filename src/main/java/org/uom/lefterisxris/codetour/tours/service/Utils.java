@@ -38,7 +38,7 @@ public class Utils {
             StringBuilder builder = new StringBuilder();
             builder.append("<").append(tagName);
             for (CharSequence attribute : attributes) {
-                if (attribute == null || attribute.isEmpty()){
+                if (attribute == null || attribute.isEmpty()) {
                     continue;
                 }
                 builder.append(" ").append(attribute);
@@ -111,9 +111,59 @@ public class Utils {
     }
 
     public static String mdToHtml(String markdown) {
+        // 预处理Mermaid代码块
+        String processedMarkdown = markdown;
+        if (markdown.contains("```mermaid")) {
+            processedMarkdown = markdown.replaceAll(
+                "```mermaid\\s*([\\s\\S]*?)```",
+                "<div class='mermaid'>$1</div>"
+            );
+        }
+
         final MarkdownFlavourDescriptor flavour = new GFMFlavourDescriptor();
-        final ASTNode parsedTree = new MarkdownParser(flavour).buildMarkdownTreeFromString(markdown);
-        return new HtmlGenerator(markdown, parsedTree, flavour, false).generateHtml(TAG_RENDERER);
+        final ASTNode parsedTree = new MarkdownParser(flavour).buildMarkdownTreeFromString(processedMarkdown);
+        String html = new HtmlGenerator(processedMarkdown, parsedTree, flavour, false).generateHtml(TAG_RENDERER);
+
+        // 包裹 markdown-body
+        html = "<article class=\"markdown-body\">" + html + "</article>";
+
+        // 引入暗黑CSS
+        String darkCss = """
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.5.1/github-markdown-dark.min.css">
+            <style>
+              body, .markdown-body {
+                background: #23272e !important;
+                color: #e6e6e6 !important;
+              }
+              .mermaid, .mermaid svg {
+                background: transparent !important;
+                color: #e6e6e6 !important;
+              }
+            </style>
+        """;
+
+        if (html.contains("class='mermaid'")) {
+            String mermaidScript = """
+                <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+                <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        if (typeof mermaid !== 'undefined') {
+                            mermaid.initialize({
+                                startOnLoad: true,
+                                theme: 'dark',
+                                securityLevel: 'loose'
+                            });
+                            mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+                        }
+                    });
+                </script>
+            """;
+            html = darkCss + mermaidScript + html;
+        } else {
+            html = darkCss + html;
+        }
+
+        return html;
     }
 
     public static boolean isFileMatchesStep(VirtualFile file, @NotNull Step step) {

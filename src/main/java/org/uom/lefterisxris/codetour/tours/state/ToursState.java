@@ -136,7 +136,7 @@ public class ToursState {
             if (onboardingTour != null)
                 tours.add(onboardingTour);
         }
-        
+
         // 只通过索引找所有的指南文件
         var userTours = loadFromIndex(project);
         if (userTours.isEmpty()) {

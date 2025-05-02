@@ -119,14 +119,23 @@ public class StepRendererPane extends JPanel {
     }
 
     private JComponent  markdownJCEFHtmlPanelForRender() {
+        final String stepDoc = renderFullDoc(
+                StateManager.getInstance().getState(project).getStepMetaLabel(step.getTitle()),
+                step.getDescription(),
+                step.getFile() != null ? String.format("%s:%s", step.getFile(), step.getLine()) : "");
+
+        // 使用MarkdownJCEFHtmlPanel来支持Mermaid渲染
         LightVirtualFile virtualFile = new LightVirtualFile(step.getTitle(), step.getDescription());
         MarkdownJCEFHtmlPanel htmlPanel = new MarkdownJCEFHtmlPanel(project, virtualFile);
+        htmlPanel.getJBCefClient().getCefClient().removeRequestHandler();
+        htmlPanel.getCefBrowser().getDevTools().createImmediately();
+        htmlPanel.setHtml(stepDoc);
 
         return htmlPanel.getComponent();
     }
 
     protected void init() {
         setLayout(new BorderLayout());
-        add(documentationHintPaneForRender(), BorderLayout.CENTER);
+        add(markdownJCEFHtmlPanelForRender(), BorderLayout.CENTER);
     }
 }
