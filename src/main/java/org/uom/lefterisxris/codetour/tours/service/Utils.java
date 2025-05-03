@@ -139,6 +139,22 @@ public class Utils {
                 background: transparent !important;
                 color: #e6e6e6 !important;
               }
+              /* 滚动条美化 */
+              .markdown-body ::-webkit-scrollbar {
+                width: 12px;
+                background: #23272e;
+              }
+              .markdown-body ::-webkit-scrollbar-thumb {
+                background: #444950;
+                border-radius: 6px;
+                border: 2px solid #23272e;
+              }
+              .markdown-body ::-webkit-scrollbar-thumb:hover {
+                background: #5c6370;
+              }
+              .markdown-body ::-webkit-scrollbar-track {
+                background: #23272e;
+              }
             </style>
         """;
 

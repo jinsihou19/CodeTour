@@ -1,5 +1,7 @@
 package org.uom.lefterisxris.codetour.tours.service;
 
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
@@ -31,6 +33,9 @@ import java.util.stream.Collectors;
  * Date: 16/4/2022
  */
 public class Navigator {
+
+    private static final String NAVIGATE = "navigate://";
+    private static final String FILE_JBCEFBROWSER = "file:///jbcefbrowser/";
 
     public static void navigateLine(@NotNull Step step, @NotNull Project project, BiConsumer<Step, Project> renderStep) {
         if (project.getBasePath() == null) return;
@@ -91,15 +96,20 @@ public class Navigator {
     }
 
     public static void navigateCode(@NotNull String navigateUrl, @NotNull Project project) {
-        String url = navigateUrl;
-        if (navigateUrl.startsWith("navigate://")) {
-            url = navigateUrl.substring("navigate://".length());
-        }
-        if (url.contains("#")) {
-            navigateMethod(url, project);
-        } else {
-            navigateLine(url, project);
-        }
+
+        ApplicationManager.getApplication().invokeLater(() -> {
+            String url = navigateUrl;
+            if (navigateUrl.startsWith(NAVIGATE)) {
+                url = navigateUrl.substring(NAVIGATE.length());
+            } else if (navigateUrl.startsWith(FILE_JBCEFBROWSER)) {
+                url = navigateUrl.substring(FILE_JBCEFBROWSER.length());
+            }
+            if (url.contains("#")) {
+                navigateMethod(url, project);
+            } else {
+                navigateLine(url, project);
+            }
+        }, ModalityState.defaultModalityState());
     }
 
     /**
