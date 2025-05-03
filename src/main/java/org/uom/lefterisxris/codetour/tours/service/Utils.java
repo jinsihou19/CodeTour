@@ -111,12 +111,19 @@ public class Utils {
     }
 
     public static String mdToHtml(String markdown) {
-        // 预处理Mermaid代码块
+        // 预处理 PlantUML 代码块
         String processedMarkdown = markdown;
-        if (markdown.contains("```mermaid")) {
+        if (markdown.contains("@startuml")) {
             processedMarkdown = markdown.replaceAll(
-                "```mermaid\\s*([\\s\\S]*?)```",
-                "<div class='mermaid'>$1</div>"
+                    "@startuml\\s*([\\s\\S]*?)@enduml",
+                    "<div class='plantuml'>$1</div>"
+            );
+        }
+        // 预处理Mermaid代码块
+        if (processedMarkdown.contains("```mermaid")) {
+            processedMarkdown = processedMarkdown.replaceAll(
+                    "```mermaid\\s*([\\s\\S]*?)```",
+                    "<div class='mermaid'>$1</div>"
             );
         }
 
@@ -129,55 +136,95 @@ public class Utils {
 
         // 引入暗黑CSS
         String darkCss = """
-            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.5.1/github-markdown-dark.min.css">
-            <style>
-              body, .markdown-body {
-                background: #23272e !important;
-                color: #e6e6e6 !important;
-              }
-              .mermaid, .mermaid svg {
-                background: transparent !important;
-                color: #e6e6e6 !important;
-              }
-              /* 滚动条美化 */
-              .markdown-body ::-webkit-scrollbar {
-                width: 12px;
-                background: #23272e;
-              }
-              .markdown-body ::-webkit-scrollbar-thumb {
-                background: #444950;
-                border-radius: 6px;
-                border: 2px solid #23272e;
-              }
-              .markdown-body ::-webkit-scrollbar-thumb:hover {
-                background: #5c6370;
-              }
-              .markdown-body ::-webkit-scrollbar-track {
-                background: #23272e;
-              }
-            </style>
-        """;
+                    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.5.1/github-markdown-dark.min.css">
+                    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+                    <style>
+                      body, .markdown-body {
+                        background: #23272e !important;
+                        color: #e6e6e6 !important;
+                      }
+                      .mermaid, .mermaid svg, .plantuml, .plantuml svg {
+                        background: transparent !important;
+                        color: #e6e6e6 !important;
+                      }
+                      /* 滚动条美化 */
+                      .markdown-body ::-webkit-scrollbar {
+                        width: 12px;
+                        background: #23272e;
+                      }
+                      .markdown-body ::-webkit-scrollbar-thumb {
+                        background: #444950;
+                        border-radius: 6px;
+                        border: 2px solid #23272e;
+                      }
+                      .markdown-body ::-webkit-scrollbar-thumb:hover {
+                        background: #5c6370;
+                      }
+                      .markdown-body ::-webkit-scrollbar-track {
+                        background: #23272e;
+                      }
+                    </style>
+                """;
+
+        // 添加必要的脚本
+        StringBuilder scripts = new StringBuilder();
+
+        // 添加 highlight.js
+        scripts.append("""
+                    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+                    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/java.min.js"></script>
+                    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+                    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+                    <script>
+                        document.addEventListener('DOMContentLoaded', function() {
+                            hljs.configure({
+                                languages: ['java', 'javascript', 'python', 'xml', 'html', 'css', 'json', 'bash', 'shell']
+                            });
+                            document.querySelectorAll('pre code').forEach((block) => {
+                                hljs.highlightElement(block);
+                            });
+                        });
+                    </script>
+                """);
 
         if (html.contains("class='mermaid'")) {
-            String mermaidScript = """
-                <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
-                <script>
-                    document.addEventListener('DOMContentLoaded', function() {
-                        if (typeof mermaid !== 'undefined') {
-                            mermaid.initialize({
-                                startOnLoad: true,
-                                theme: 'dark',
-                                securityLevel: 'loose'
+            scripts.append("""
+                        <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+                        <script>
+                            document.addEventListener('DOMContentLoaded', function() {
+                                if (typeof mermaid !== 'undefined') {
+                                    mermaid.initialize({
+                                        startOnLoad: true,
+                                        theme: 'dark',
+                                        securityLevel: 'loose'
+                                    });
+                                    mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+                                }
                             });
-                            mermaid.init(undefined, document.querySelectorAll('.mermaid'));
-                        }
-                    });
-                </script>
-            """;
-            html = darkCss + mermaidScript + html;
-        } else {
-            html = darkCss + html;
+                        </script>
+                    """);
         }
+
+        if (html.contains("class='plantuml'")) {
+            scripts.append("""
+                        <script src="https://cdn.jsdelivr.net/npm/plantuml-encoder@1.4.0/dist/plantuml-encoder.min.js"></script>
+                        <script>
+                            document.addEventListener('DOMContentLoaded', function() {
+                                const plantumlElements = document.querySelectorAll('.plantuml');
+                                plantumlElements.forEach(function(element) {
+                                    const encoded = plantumlEncoder.encode(element.textContent);
+                                    const img = document.createElement('img');
+                                    img.src = 'https://www.plantuml.com/plantuml/dsvg/' + encoded;
+                                    img.style.maxWidth = '100%';
+                                    element.innerHTML = '';
+                                    element.appendChild(img);
+                                });
+                            });
+                        </script>
+                    """);
+        }
+
+        html = darkCss + scripts + html;
 
         return html;
     }
