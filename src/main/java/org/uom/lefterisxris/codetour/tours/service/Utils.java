@@ -103,9 +103,11 @@ public class Utils {
         sb.append("\n\n").append(description).append("\n");
         sb.append(DocumentationMarkup.CONTENT_END);
         if (StringUtils.isNotEmpty(file)) {
-            sb.append(DocumentationMarkup.SECTIONS_START);
-            addKeyValueSection("File:", file, sb);
-            sb.append(DocumentationMarkup.SECTIONS_END);
+            sb.append("<hr/>");
+            sb.append(DocumentationMarkup.DEFINITION_START);
+            sb.append("File: ");
+            sb.append(createLink(file));
+            sb.append(DocumentationMarkup.DEFINITION_END);
         }
         return mdToHtml(sb.toString());
     }
@@ -162,6 +164,50 @@ public class Utils {
                       }
                       .markdown-body ::-webkit-scrollbar-track {
                         background: #23272e;
+                      }
+                      ::-webkit-scrollbar {
+                          width: 14.0px;
+                          height: 14.0px;
+                      }
+                
+                      ::-webkit-scrollbar-track {
+                          background-color:
+                                  rgba(128, 128, 128, 0.0);
+                      }
+                
+                      ::-webkit-scrollbar-track:hover {
+                          background-color:rgba(128, 128, 128, 0.0);
+                      }
+                
+                      ::-webkit-scrollbar-thumb {
+                          background-color:
+                                  rgba(255, 255, 255, 0.14901960784313725);
+                          border-radius:14.0px;
+                          border-width: 3.0px;
+                          border-style: solid;
+                          border-color: rgba(128, 128, 128, 0.0);
+                          background-clip: padding-box;
+                          outline: 1px solid rgba(38, 38, 38, 0.34901960784313724);
+                          outline-offset: -3.0px;
+                      }
+                
+                      ::-webkit-scrollbar-thumb:hover {
+                          background-color:rgba(255, 255, 255, 0.30196078431372547);
+                          border-radius:14.0px;
+                          border-width: 3.0px;
+                          border-style: solid;
+                          border-color: rgba(128, 128, 128, 0.0);
+                          background-clip: padding-box;
+                          outline: 1px solid rgba(38, 38, 38, 0.5490196078431373);
+                          outline-offset: -3.0px;
+                      }
+                
+                      ::-webkit-scrollbar-button {
+                          display: none;
+                      }
+                
+                      ::-webkit-scrollbar-corner {
+                          background-color: rgba(63, 68, 66, 1.0);
                       }
                     </style>
                 """;
@@ -238,15 +284,6 @@ public class Utils {
         final String filePath = Paths.get(file.getPath()).toString();
 
         return filePath.endsWith(stepFilePath);
-    }
-
-    private static void addKeyValueSection(String key, String value, StringBuilder sb) {
-        sb.append(DocumentationMarkup.SECTION_HEADER_START);
-        sb.append(key);
-        sb.append(DocumentationMarkup.SECTION_SEPARATOR);
-        sb.append("<p>");
-        sb.append(createLink(value));
-        sb.append(DocumentationMarkup.SECTION_END);
     }
 
     private static String createLink(String value) {

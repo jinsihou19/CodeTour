@@ -51,6 +51,11 @@ public class StepRendererPane extends JPanel {
                 step.getDescription(),
                 step.getFile() != null ? String.format("%s:%s", step.getFile(), step.getLine()) : "");
 
+//        CefApp.getInstance().registerSchemeHandlerFactory(
+//                "file",
+//                "",
+//                (cefBrowser, cefFrame, s, cefRequest) -> new ResourceHandler());
+
         JBCefBrowser browser = new JBCefBrowser();
 
         browser.loadHTML(stepDoc);

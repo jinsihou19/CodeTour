@@ -1,14 +1,12 @@
 package org.uom.lefterisxris.codetour.tours.ui;
 
-import com.intellij.codeInsight.documentation.DocumentationComponent;
-import com.intellij.codeInsight.documentation.DocumentationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
-import com.intellij.ui.SideBorder;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTabbedPane;
-import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.components.JBTextField;
+import com.intellij.ui.jcef.JBCefBrowser;
+import com.intellij.ui.jcef.JBCefJSQuery;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UI;
 import com.intellij.util.ui.UIUtil;
@@ -17,9 +15,18 @@ import org.jetbrains.annotations.NotNull;
 import org.uom.lefterisxris.codetour.tours.domain.Step;
 import org.uom.lefterisxris.codetour.tours.state.StateManager;
 
-import javax.swing.*;
+import javax.swing.Action;
+import javax.swing.BoxLayout;
+import javax.swing.JComponent;
+import javax.swing.JPanel;
+import javax.swing.JTabbedPane;
+import javax.swing.SwingConstants;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
-import static org.uom.lefterisxris.codetour.tours.service.Utils.*;
+import static org.uom.lefterisxris.codetour.tours.service.Utils.equalInt;
+import static org.uom.lefterisxris.codetour.tours.service.Utils.equalStr;
+import static org.uom.lefterisxris.codetour.tours.service.Utils.renderFullDoc;
 
 /**
  * Editor (as dialog) for Step editing. Supports preview
@@ -29,119 +36,273 @@ import static org.uom.lefterisxris.codetour.tours.service.Utils.*;
  */
 public class StepEditor extends DialogWrapper {
 
-   private JTabbedPane pane;
-   private final Project project;
-   private final Step step;
+    private JTabbedPane pane;
+    private final Project project;
+    private final Step step;
 
-   private JBTextField titleTextField;
-   private JBTextField referenceTextField;
-   private JBTextArea descriptionTextArea;
-   private DocumentationComponent previewComponent;
-   private String stepDoc;
+    private JBTextField titleTextField;
+    private JBTextField referenceTextField;
+    private JBCefBrowser editorBrowser;
+    private JBCefBrowser previewBrowser;
+    private String stepDoc;
+    private String currentMarkdown;
+    private JBCefJSQuery jsQuery;
 
-   public StepEditor(Project project, Step step) {
-      super(project);
-      this.project = project;
-      this.step = step;
-      init();
-      setTitle("Step Editor");
-   }
+    public StepEditor(Project project, Step step) {
+        super(project);
+        this.project = project;
+        this.step = step;
+        this.currentMarkdown = step.getDescription();
+        init();
+        setTitle("Step Editor");
+        getRootPane().setDefaultButton(null);
+    }
 
-   @Override
-   protected @NotNull JComponent createCenterPanel() {
-      pane = new JBTabbedPane(SwingConstants.TOP);
-      pane.addTab("Step Info", createEditorPanel());
-      pane.addTab("Preview", createPreviewPanel());
-      pane.addChangeListener(e -> {
-         if (pane.getSelectedIndex() == 1)
+    @Override
+    protected Action @NotNull [] createActions() {
+        return new Action[]{getOKAction(), getCancelAction()};
+    }
+
+    @Override
+    protected @NotNull JComponent createCenterPanel() {
+        pane = new JBTabbedPane(SwingConstants.TOP);
+        pane.addTab("Step Info", createEditorPanel());
+        pane.addTab("Preview", createPreviewPanel());
+        pane.addChangeListener(e -> {
+            if (pane.getSelectedIndex() == 1)
+                updatePreviewComponent();
+        });
+        return JBUI.Panels.simplePanel(pane);
+    }
+
+    private JComponent createEditorPanel() {
+        // 创建编辑器浏览器
+        editorBrowser = JBCefBrowser.createBuilder()
+                .setUrl("about:blank")
+                .build();
+
+        // 创建 JavaScript 查询处理器
+        jsQuery = JBCefJSQuery.create(editorBrowser);
+        jsQuery.addHandler((query) -> {
+            currentMarkdown = query;
             updatePreviewComponent();
-      });
-      return JBUI.Panels.simplePanel(pane);
-   }
+            return null;
+        });
 
-   private JComponent createEditorPanel() {
-      descriptionTextArea = new JBTextArea(step.getDescription(), 10, 60);
-      final JBScrollPane descriptionPane = new JBScrollPane(descriptionTextArea);
-      descriptionPane.putClientProperty(UIUtil.KEEP_BORDER_SIDES, SideBorder.ALL);
+        boolean isDark = UIUtil.isUnderDarcula() || UIUtil.isUnderIntelliJLaF();
+        String theme = isDark ? "dark" : "light";
+        String bgColor = isDark ? "#2B2B2B" : "#FFFFFF";
+        String textColor = isDark ? "#A9B7C6" : "#000000";
+        String toolbarBg = isDark ? "#3C3F41" : "#F5F5F5";
+        String borderColor = isDark ? "#515151" : "#E0E0E0";
 
-      titleTextField = new JBTextField(step.getTitle());
-      referenceTextField =
-            new JBTextField(step.getFile() != null ? String.format("%s:%s", step.getFile(), step.getLine()) : "");
+        // 初始化编辑器
+        String editorHtml = "<!DOCTYPE html>" +
+                "<html>" +
+                "<head>" +
+                "<meta charset='UTF-8'>" +
+                "<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css'>" +
+                "<link rel='stylesheet' href='https://cdn.jsdelivr.net/gh/sindresorhus/github-markdown-css/github-markdown" + (isDark ? "-dark" : "") + ".css'>" +
+                "<script src='https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js'></script>" +
+                "<script src='https://cdn.jsdelivr.net/npm/marked/marked.min.js'></script>" +
+                "<script src='https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js'></script>" +
+                "<style>" +
+                "body { margin: 0; padding: 0; background-color: " + bgColor + "; }" +
+                ".EasyMDEContainer { background-color: " + bgColor + "; }" +
+                ".editor-toolbar { border-width: 0 !important; background-color: " + toolbarBg + " !important;}" +
+                ".editor-toolbar button { color: " + textColor + " !important; }" +
+                ".editor-toolbar button:hover { background-color: " + (isDark ? "#4B4B4B" : "#E8E8E8") + " !important; }" +
+                ".CodeMirror { background-color: " + bgColor + " !important; color: " + textColor + " !important; border-width: 0 !important;}" +
+                ".CodeMirror-gutters { background-color: " + (isDark ? "#313335" : "#F5F5F5") + " !important; border-color: " + borderColor + " !important; }" +
+                ".CodeMirror-linenumber { color: " + (isDark ? "#606366" : "#999999") + " !important; }" +
+                ".CodeMirror-cursor { border-left: 1px solid " + textColor + " !important; }" +
+                ".CodeMirror-selected { background-color: " + (isDark ? "#3A3D41" : "#E8E8E8") + " !important; }" +
+                ".CodeMirror-focused .CodeMirror-selected { background-color: " + (isDark ? "#3A3D41" : "#E8E8E8") + " !important; }" +
+                ".editor-preview, .editor-preview-side { background-color: " + bgColor + " !important; color: " + textColor + " !important; }" +
+                ".markdown-body { background-color: " + bgColor + " !important; }" +
+                """
+                        ::-webkit-scrollbar {
+                            width: 14.0px;
+                            height: 14.0px;
+                            background-color: rgba(63, 68, 66, 1.0);
+                        }
+                        
+                        ::-webkit-scrollbar-track {
+                            background-color:
+                                    rgba(128, 128, 128, 0.0);
+                        }
+                        
+                        ::-webkit-scrollbar-track:hover {
+                            background-color:rgba(128, 128, 128, 0.0);
+                        }
+                        
+                        ::-webkit-scrollbar-thumb {
+                            background-color:
+                                    rgba(255, 255, 255, 0.14901960784313725);
+                            border-radius:14.0px;
+                            border-width: 3.0px;
+                            border-style: solid;
+                            border-color: rgba(128, 128, 128, 0.0);
+                            background-clip: padding-box;
+                            outline: 1px solid rgba(38, 38, 38, 0.34901960784313724);
+                            outline-offset: -3.0px;
+                        }
+                        
+                        ::-webkit-scrollbar-thumb:hover {
+                            background-color:rgba(255, 255, 255, 0.30196078431372547);
+                            border-radius:14.0px;
+                            border-width: 3.0px;
+                            border-style: solid;
+                            border-color: rgba(128, 128, 128, 0.0);
+                            background-clip: padding-box;
+                            outline: 1px solid rgba(38, 38, 38, 0.5490196078431373);
+                            outline-offset: -3.0px;
+                        }
+                        
+                        ::-webkit-scrollbar-button {
+                            display:
+                                    none;
+                        }
+                        
+                        ::-webkit-scrollbar-corner {
+                            background-color: rgba(63, 68, 66, 1.0);
+                        }
+                        """ +
+                "</style>" +
+                "</head>" +
+                "<body>" +
+                "<textarea id='editor'></textarea>" +
+                "<script>" +
+                "mermaid.initialize({ " +
+                "  startOnLoad: true, " +
+                "  theme: '" + (isDark ? "dark" : "default") + "', " +
+                "  securityLevel: 'loose' " +
+                "});" +
+                "var easyMDE = new EasyMDE({" +
+                "  element: document.getElementById('editor')," +
+                "  initialValue: '" + escapeJavaScript(currentMarkdown) + "'," +
+                "  autofocus: true," +
+                "  spellChecker: false," +
+                "  status: false," +
+                "  theme: '" + theme + "'," +
+                "  toolbar: ['bold', 'italic', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', '|', 'link', 'image', '|', 'fullscreen', '|', 'guide']," +
+                "  previewRender: function(plainText) {" +
+                "    var preview = document.createElement('div');" +
+                "    preview.className = 'markdown-body';" +
+                "    preview.innerHTML = marked.parse(plainText);" +
+                "    mermaid.init(undefined, preview.querySelectorAll('language-mermaid'));" +
+                "    return preview.innerHTML;" +
+                "  }," +
+                "renderingConfig: {" +
+                "   codeSyntaxHighlighting: true," +
+                "}" +
+                "});" +
+                "easyMDE.codemirror.on('change', function() {" +
+                "  " + jsQuery.inject("easyMDE.value()") + ";" +
+                "});" +
+                "</script>" +
+                "</body>" +
+                "</html>";
 
-      final JPanel textFieldsGridPanel = UI.PanelFactory.grid()
-            .add(UI.PanelFactory.panel(titleTextField)
-                  .withLabel("&Title:")
-                  .withComment("Step title"))
-            .add(UI.PanelFactory.panel(referenceTextField)
-                  .withLabel("&Navigation reference:")
-                  .withComment("Code location where this step will Navigate to on click (optional)"))
-            .createPanel();
+        String encodedHtml = Base64.getEncoder().encodeToString(editorHtml.getBytes(StandardCharsets.UTF_8));
+        editorBrowser.loadURL("data:text/html;base64," + encodedHtml);
 
-      final JPanel textAreaPanel = UI.PanelFactory.panel(descriptionPane)
-            .withLabel("Step description:")
-            .anchorLabelOn(UI.Anchor.Top)
-            .withComment("Markdown and HTML are supported.")
-            .withCommentIcon(CodeTourIcons.MARKDOWN)
-            .resizeX(true).resizeY(true).createPanel();
+        final JBScrollPane editorPane = new JBScrollPane(editorBrowser.getComponent());
 
-      final JPanel panel = new JPanel();
-      panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-      panel.setBorder(JBUI.Borders.emptyTop(5));
-      panel.add(textFieldsGridPanel);
-      panel.add(textAreaPanel);
+        titleTextField = new JBTextField(step.getTitle());
+        referenceTextField =
+                new JBTextField(step.getFile() != null ? String.format("%s:%s", step.getFile(), step.getLine()) : "");
 
-      return panel;
-   }
+        final JPanel textFieldsGridPanel = UI.PanelFactory.grid()
+                .add(UI.PanelFactory.panel(titleTextField)
+                        .withLabel("&Title:")
+                        .withComment("Step title"))
+                .add(UI.PanelFactory.panel(referenceTextField)
+                        .withLabel("&Navigation reference:")
+                        .withComment("Code location where this step will Navigate to on click (optional)"))
+                .createPanel();
 
-   private JComponent createPreviewPanel() {
-      stepDoc = renderFullDoc(
-            StateManager.getInstance().getState(project).getStepMetaLabel(titleTextField.getText()),
-            descriptionTextArea.getText(),
-            referenceTextField.getText());
+        final JPanel textAreaPanel = UI.PanelFactory.panel(editorPane)
+                .withLabel("Step description:")
+                .anchorLabelOn(UI.Anchor.Top)
+                .withComment("Markdown editor with live preview.")
+                .withCommentIcon(CodeTourIcons.MARKDOWN)
+                .resizeX(true)
+                .resizeY(true)
+                .createPanel();
 
-      final DocumentationManager documentationManager = DocumentationManager.getInstance(project);
-      previewComponent = new DocumentationComponent(documentationManager);
-      previewComponent.setData(null, stepDoc, null, null, null);
+        final JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBorder(JBUI.Borders.emptyTop(5));
+        panel.add(textFieldsGridPanel);
+        panel.add(textAreaPanel);
 
-      final JPanel panel = new JPanel();
-      panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-      panel.setBorder(JBUI.Borders.emptyTop(5));
-      panel.add(previewComponent);
+        return panel;
+    }
 
-      return panel;
-   }
+    private String escapeJavaScript(String str) {
+        return str.replace("\\", "\\\\")
+                .replace("'", "\\'")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
+    }
 
-   private void updatePreviewComponent() {
-      stepDoc = renderFullDoc(
-            StateManager.getInstance().getState(project).getStepMetaLabel(titleTextField.getText()),
-            descriptionTextArea.getText(),
-            referenceTextField.getText());
-      previewComponent.setData(null, stepDoc, null, null, null);
-   }
+    private JComponent createPreviewPanel() {
+        stepDoc = renderFullDoc(
+                StateManager.getInstance().getState(project).getStepMetaLabel(titleTextField.getText()),
+                currentMarkdown,
+                referenceTextField.getText());
 
-   public Step getUpdatedStep() {
-      final String[] reference = referenceTextField.getText().trim().split(":");
+        previewBrowser = JBCefBrowser.createBuilder()
+                .setUrl("about:blank")
+                .build();
 
-      step.setTitle(titleTextField.getText().trim());
-      step.setDescription(descriptionTextArea.getText().trim());
+        updatePreviewContent();
 
-      // optional file:line
-      final String file = reference[0] != null && !reference[0].isEmpty() ? reference[0] : null;
-      final Integer line = reference.length > 1 && reference[1] != null && !reference[1].isEmpty()
-            ? Integer.parseInt(reference[1])
-            : null;
+        final JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBorder(JBUI.Borders.emptyTop(5));
+        panel.add(previewBrowser.getComponent());
 
-      step.setFile(file);
-      step.setLine(line);
+        return panel;
+    }
 
-      return step;
-   }
+    private void updatePreviewComponent() {
+        stepDoc = renderFullDoc(
+                StateManager.getInstance().getState(project).getStepMetaLabel(titleTextField.getText()),
+                currentMarkdown,
+                referenceTextField.getText());
+        updatePreviewContent();
+    }
 
-   public boolean isDirty() {
-      final String[] reference = referenceTextField.getText().trim().split(":");
-      return !equalStr(step.getTitle(), titleTextField.getText())
-            || !equalStr(step.getDescription(), descriptionTextArea.getText())
-            || !equalStr(step.getFile(), reference[0])
-            || !equalInt(step.getLine(), reference.length > 1 ? Integer.parseInt(reference[1]) : null);
-   }
+    private void updatePreviewContent() {
+        previewBrowser.loadHTML(stepDoc);
+    }
+
+    public Step getUpdatedStep() {
+        final String[] reference = referenceTextField.getText().trim().split(":");
+
+        step.setTitle(titleTextField.getText().trim());
+        step.setDescription(currentMarkdown.trim());
+
+        // optional file:line
+        final String file = reference[0] != null && !reference[0].isEmpty() ? reference[0] : null;
+        final Integer line = reference.length > 1 && reference[1] != null && !reference[1].isEmpty()
+                ? Integer.parseInt(reference[1])
+                : null;
+
+        step.setFile(file);
+        step.setLine(line);
+
+        return step;
+    }
+
+    public boolean isDirty() {
+        final String[] reference = referenceTextField.getText().trim().split(":");
+        return !equalStr(step.getTitle(), titleTextField.getText())
+                || !equalStr(step.getDescription(), currentMarkdown)
+                || !equalStr(step.getFile(), reference[0])
+                || !equalInt(step.getLine(), reference.length > 1 ? Integer.parseInt(reference[1]) : null);
+    }
 }
