@@ -1,6 +1,7 @@
 package org.uom.lefterisxris.codetour.tours.ui;
 
 import com.intellij.ui.render.LabelBasedRenderer;
+import com.intellij.util.ui.UIUtil;
 import icons.CodeTourIcons;
 import org.jetbrains.annotations.NotNull;
 import org.uom.lefterisxris.codetour.tours.domain.Step;
@@ -22,6 +23,7 @@ public class TreeRenderer extends LabelBasedRenderer.Tree {
    private boolean isDragging = false;
    private Object draggedNode = null;
    private Object dropTarget = null;
+   private boolean isDropAbove = false;  // 新增：表示是否拖放到目标上方
 
    public TreeRenderer(String selectedTourId) {
       this.selectedTourId = selectedTourId;
@@ -32,8 +34,9 @@ public class TreeRenderer extends LabelBasedRenderer.Tree {
       this.draggedNode = draggedNode;
    }
 
-   public void setDropTarget(Object target) {
+   public void setDropTarget(Object target, boolean above) {
       this.dropTarget = target;
+      this.isDropAbove = above;
    }
 
    @Override
@@ -63,9 +66,21 @@ public class TreeRenderer extends LabelBasedRenderer.Tree {
                setForeground(new Color(128, 128, 128, 128));
                setOpaque(true);
             } else if (userObject == dropTarget) {
+               // 目标位置显示高亮
+               setBackground(new Color(215, 0, 0, 50));
+               setOpaque(true);
                // 设置粗体
                Font currentFont = getFont();
                setFont(currentFont.deriveFont(Font.BOLD));
+               
+               // 添加横线指示器
+               if (userObject instanceof Step) {
+                  Color selectionColor = UIUtil.getTreeSelectionBackground();
+                  setBorder(BorderFactory.createCompoundBorder(
+                     isDropAbove ? BorderFactory.createMatteBorder(2, 0, 0, 0, selectionColor) : BorderFactory.createMatteBorder(0, 0, 2, 0, selectionColor),
+                     BorderFactory.createEmptyBorder(2, 0, 2, 0)
+                  ));
+               }
             }
          } else {
             // 非拖动状态下重置样式
@@ -75,6 +90,8 @@ public class TreeRenderer extends LabelBasedRenderer.Tree {
             // 重置字体
             Font currentFont = getFont();
             setFont(currentFont.deriveFont(Font.PLAIN));
+            // 重置边框
+            setBorder(null);
          }
       }
 

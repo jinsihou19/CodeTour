@@ -46,6 +46,7 @@ import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 import java.awt.BorderLayout;
 import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.time.LocalDateTime;
@@ -217,8 +218,8 @@ public class ToolPaneWindow {
                     return false;
                 }
 
-                DefaultMutableTreeNode draggedNode = (DefaultMutableTreeNode) attachedObject;
-                if (!(draggedNode.getUserObject() instanceof Step)) {
+                DefaultMutableTreeNode sourceNode = (DefaultMutableTreeNode) attachedObject;
+                if (!(sourceNode.getUserObject() instanceof Step)) {
                     return false;
                 }
 
@@ -238,7 +239,7 @@ public class ToolPaneWindow {
                     }
                     // 更新目标位置的高亮
                     if (toursTree.getCellRenderer() instanceof TreeRenderer renderer) {
-                        renderer.setDropTarget(targetNode.getUserObject());
+                        renderer.setDropTarget(targetNode.getUserObject(), false);
                         toursTree.repaint();
                     }
                     event.setDropPossible(true, "Drop here to move step");
@@ -252,9 +253,15 @@ public class ToolPaneWindow {
                             return false;
                         }
                     }
+                    
+                    // 计算是否拖放到目标上方
+                    Point dropPoint = event.getPoint();
+                    Rectangle bounds = toursTree.getPathBounds(targetPath);
+                    boolean isAbove = dropPoint.y < (bounds.y + bounds.height / 2);
+                    
                     // 更新目标位置的高亮
                     if (toursTree.getCellRenderer() instanceof TreeRenderer renderer) {
-                        renderer.setDropTarget(targetNode.getUserObject());
+                        renderer.setDropTarget(targetNode.getUserObject(), isAbove);
                         toursTree.repaint();
                     }
                     event.setDropPossible(true, "Drop here to move step");
@@ -307,12 +314,21 @@ public class ToolPaneWindow {
                         StateManager.getInstance().getState(project).updateTour(targetTour);
                     }
                 } else if (targetNode.getUserObject() instanceof Step) {
-                    // 如果目标是Step，插入到该Step之前
+                    // 如果目标是Step，插入到该Step之前或之后
                     Step targetStep = (Step) targetNode.getUserObject();
                     DefaultMutableTreeNode targetParent = (DefaultMutableTreeNode) targetNode.getParent();
                     Tour targetTour = (Tour) targetParent.getUserObject();
                     
+                    // 计算是否拖放到目标上方
+                    Point dropPoint = event.getPoint();
+                    Rectangle bounds = toursTree.getPathBounds(targetPath);
+                    boolean isAbove = dropPoint.y < (bounds.y + bounds.height / 2);
+                    
                     int targetIndex = targetTour.getSteps().indexOf(targetStep);
+                    // 如果拖放到下方，则插入到目标Step之后
+                    if (!isAbove) {
+                        targetIndex++;
+                    }
                     targetTour.getSteps().add(targetIndex, draggedStep);
                     sourceTour.getSteps().remove(draggedStep);
 
