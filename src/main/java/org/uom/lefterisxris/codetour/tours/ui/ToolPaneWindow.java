@@ -52,6 +52,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -345,6 +346,21 @@ public class ToolPaneWindow {
      * 更新指南树数据
      */
     public void updateToursTree() {
+        // 保存当前展开的节点
+        Set<String> expandedTourTitles = new HashSet<>();
+        for (int i = 0; i < toursTree.getRowCount(); i++) {
+            TreePath path = toursTree.getPathForRow(i);
+            if (toursTree.isExpanded(path)) {
+                Object lastComponent = path.getLastPathComponent();
+                if (lastComponent instanceof DefaultMutableTreeNode) {
+                    Object userObject = ((DefaultMutableTreeNode) lastComponent).getUserObject();
+                    if (userObject instanceof Tour) {
+                        expandedTourTitles.add(((Tour) userObject).getTitle());
+                    }
+                }
+            }
+        }
+
         final List<Tour> tours = StateManager.getInstance().getState(project).getTours();
         final DefaultMutableTreeNode root = new DefaultMutableTreeNode(TREE_TITLE);
         tours.forEach(tour -> {
@@ -355,6 +371,16 @@ public class ToolPaneWindow {
         });
         treeModel.setRoot(root);
         treeModel.reload();
+
+        // 恢复展开状态
+        for (int i = 0; i < root.getChildCount(); i++) {
+            DefaultMutableTreeNode node = (DefaultMutableTreeNode) root.getChildAt(i);
+            if (node.getUserObject() instanceof Tour tour) {
+                if (expandedTourTitles.contains(tour.getTitle())) {
+                    toursTree.expandPath(new TreePath(node.getPath()));
+                }
+            }
+        }
     }
 
 
