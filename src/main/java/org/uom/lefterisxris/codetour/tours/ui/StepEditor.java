@@ -2,6 +2,7 @@ package org.uom.lefterisxris.codetour.tours.ui;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
+import com.intellij.ui.JBColor;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTabbedPane;
 import com.intellij.ui.components.JBTextField;
@@ -89,8 +90,7 @@ public class StepEditor extends DialogWrapper {
             return null;
         });
 
-        boolean isDark = UIUtil.isUnderDarcula() || UIUtil.isUnderIntelliJLaF();
-        String theme = isDark ? "dark" : "light";
+        boolean isDark = !JBColor.isBright() || UIUtil.isUnderIntelliJLaF();
         String bgColor = isDark ? "#2B2B2B" : "#FFFFFF";
         String textColor = isDark ? "#A9B7C6" : "#000000";
         String toolbarBg = isDark ? "#3C3F41" : "#F5F5F5";
@@ -111,13 +111,14 @@ public class StepEditor extends DialogWrapper {
                 ".EasyMDEContainer { background-color: " + bgColor + "; }" +
                 ".editor-toolbar { border-width: 0 !important; background-color: " + toolbarBg + " !important;}" +
                 ".editor-toolbar button { color: " + textColor + " !important; }" +
-                ".editor-toolbar button:hover { background-color: " + (isDark ? "#4B4B4B" : "#E8E8E8") + " !important; }" +
+                ".editor-toolbar button:hover { background-color: #3C3F41 !important; }" +
+                ".editor-toolbar button.active { background-color: #3C3F41 !important; }" +
                 ".CodeMirror { background-color: " + bgColor + " !important; color: " + textColor + " !important; border-width: 0 !important;}" +
-                ".CodeMirror-gutters { background-color: " + (isDark ? "#313335" : "#F5F5F5") + " !important; border-color: " + borderColor + " !important; }" +
-                ".CodeMirror-linenumber { color: " + (isDark ? "#606366" : "#999999") + " !important; }" +
+                ".CodeMirror-gutters { background-color: #313335 !important; border-color: " + borderColor + " !important; }" +
+                ".CodeMirror-linenumber { color: #606366 !important; }" +
                 ".CodeMirror-cursor { border-left: 1px solid " + textColor + " !important; }" +
-                ".CodeMirror-selected { background-color: " + (isDark ? "#3A3D41" : "#E8E8E8") + " !important; }" +
-                ".CodeMirror-focused .CodeMirror-selected { background-color: " + (isDark ? "#3A3D41" : "#E8E8E8") + " !important; }" +
+                ".CodeMirror-selected { background-color: #3A3D41 !important; }" +
+                ".CodeMirror-focused .CodeMirror-selected { background-color: #3A3D41 !important; }" +
                 ".editor-preview, .editor-preview-side { background-color: " + bgColor + " !important; color: " + textColor + " !important; }" +
                 ".markdown-body { background-color: " + bgColor + " !important; }" +
                 """
@@ -175,28 +176,33 @@ public class StepEditor extends DialogWrapper {
                 "<script>" +
                 "mermaid.initialize({ " +
                 "  startOnLoad: true, " +
-                "  theme: '" + (isDark ? "dark" : "default") + "', " +
+                "  theme: 'dark', " +
                 "  securityLevel: 'loose' " +
                 "});" +
-                "var easyMDE = new EasyMDE({" +
-                "  element: document.getElementById('editor')," +
-                "  initialValue: '" + escapeJavaScript(currentMarkdown) + "'," +
-                "  autofocus: true," +
-                "  spellChecker: false," +
-                "  status: false," +
-                "  theme: '" + theme + "'," +
-                "  toolbar: ['bold', 'italic', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', '|', 'link', 'image', '|', 'fullscreen', '|', 'guide']," +
-                "  previewRender: function(plainText) {" +
-                "    var preview = document.createElement('div');" +
-                "    preview.className = 'markdown-body';" +
-                "    preview.innerHTML = marked.parse(plainText);" +
-                "    mermaid.init(undefined, preview.querySelectorAll('language-mermaid'));" +
-                "    return preview.innerHTML;" +
-                "  }," +
-                "renderingConfig: {" +
-                "   codeSyntaxHighlighting: true," +
-                "}" +
-                "});" +
+                "var initialValue = '" + escapeJavaScript(currentMarkdown) + "';" +
+                """
+                    var easyMDE = new EasyMDE({
+                        element: document.getElementById('editor'),
+                        initialValue: initialValue,
+                        autofocus: true,
+                        spellChecker: false,
+                        status: false,
+                        insertTexts: {
+                            link: ["[", "](navigate://)"],
+                        },
+                        toolbar: ['bold', 'italic', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', 'clean-block', 'table', 'code', '|', 'link', 'image', '|', 'fullscreen'],
+                        previewRender: function (plainText) {
+                            var preview = document.createElement('div');
+                            preview.className = 'markdown-body';
+                            preview.innerHTML = marked.parse(plainText);
+                            mermaid.init(undefined, preview.querySelectorAll('language-mermaid'));
+                            return preview.innerHTML;
+                        },
+                        renderingConfig: {
+                            codeSyntaxHighlighting: true,
+                        }
+                    });
+                """ +
                 "easyMDE.codemirror.on('change', function() {" +
                 "  " + jsQuery.inject("easyMDE.value()") + ";" +
                 "});" +

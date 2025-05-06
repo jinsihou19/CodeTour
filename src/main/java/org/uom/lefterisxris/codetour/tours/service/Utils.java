@@ -102,6 +102,11 @@ public class Utils {
             description = description.replaceAll("\\n\\n\\n", "\n\n<br/>\n\n");
         sb.append("\n\n").append(description).append("\n");
         sb.append(DocumentationMarkup.CONTENT_END);
+        pageFooterIfNeed(file, sb);
+        return mdToHtml(sb.toString());
+    }
+
+    private static void pageFooterIfNeed(String file, StringBuilder sb) {
         if (StringUtils.isNotEmpty(file)) {
             sb.append("<hr/>");
             sb.append(DocumentationMarkup.DEFINITION_START);
@@ -109,7 +114,6 @@ public class Utils {
             sb.append(createLink(file));
             sb.append(DocumentationMarkup.DEFINITION_END);
         }
-        return mdToHtml(sb.toString());
     }
 
     public static String mdToHtml(String markdown) {
