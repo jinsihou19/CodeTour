@@ -167,42 +167,162 @@ public class ToolPaneWindow {
             @Override
             public boolean canStartDragging(DnDAction action, Point point) {
                 TreePath path = toursTree.getPathForLocation(point.x, point.y);
-                return path != null; // 允许拖动非空节点
+                if (path == null) return false;
+                
+                DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
+                // 只允许拖动Step节点
+                if (node.getUserObject() instanceof Step) {
+                    // 设置拖动状态
+                    if (toursTree.getCellRenderer() instanceof TreeRenderer renderer) {
+                        renderer.setDragging(true, node.getUserObject());
+                        toursTree.repaint();
+                    }
+                    return true;
+                }
+                return false;
             }
 
             @Override
             public DnDDragStartBean startDragging(DnDAction action, Point point) {
                 TreePath path = toursTree.getPathForLocation(point.x, point.y);
                 if (path != null) {
-                    return new DnDDragStartBean(path.getLastPathComponent().toString());
+                    DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
+                    if (node.getUserObject() instanceof Step) {
+                        return new DnDDragStartBean(node);
+                    }
                 }
                 return null;
             }
 
             @Override
             public void dragDropEnd() {
-                System.out.println("拖动结束");
+                // 清除拖动状态
+                if (toursTree.getCellRenderer() instanceof TreeRenderer renderer) {
+                    renderer.setDragging(false, null);
+                    renderer.setDropTarget(null);
+                    toursTree.repaint();
+                }
+                // 拖动结束后刷新树
+                updateToursTree();
             }
-
         }, toursTree);
 
         // 注册拖放目标
         dndManager.registerTarget(new DnDTarget() {
             @Override
             public boolean update(DnDEvent event) {
-                // 在拖动过程中，更新拖动目标的外观
                 Object attachedObject = event.getAttachedObject();
-                if (attachedObject instanceof String) {
-                    event.setDropPossible(true, "Drop here!");
+                if (!(attachedObject instanceof DefaultMutableTreeNode)) {
+                    return false;
                 }
-                return true;
+
+                DefaultMutableTreeNode draggedNode = (DefaultMutableTreeNode) attachedObject;
+                if (!(draggedNode.getUserObject() instanceof Step)) {
+                    return false;
+                }
+
+                TreePath targetPath = toursTree.getPathForLocation(event.getPoint().x, event.getPoint().y);
+                if (targetPath == null) {
+                    return false;
+                }
+
+                DefaultMutableTreeNode targetNode = (DefaultMutableTreeNode) targetPath.getLastPathComponent();
+                
+                // 只允许拖放到Tour节点或Step节点上，但不允许拖放到Virtual Onboarding Assistant
+                if (targetNode.getUserObject() instanceof Tour) {
+                    Tour targetTour = (Tour) targetNode.getUserObject();
+                    if (targetTour.getTitle().equals(OnboardingAssistant.ONBOARD_ASSISTANT_TITLE)) {
+                        event.setDropPossible(false, "Cannot drop into Virtual Onboarding Assistant");
+                        return false;
+                    }
+                    // 更新目标位置的高亮
+                    if (toursTree.getCellRenderer() instanceof TreeRenderer renderer) {
+                        renderer.setDropTarget(targetNode.getUserObject());
+                        toursTree.repaint();
+                    }
+                    event.setDropPossible(true, "Drop here to move step");
+                    return true;
+                } else if (targetNode.getUserObject() instanceof Step) {
+                    // 检查父节点是否是Virtual Onboarding Assistant
+                    DefaultMutableTreeNode parentNode = (DefaultMutableTreeNode) targetNode.getParent();
+                    if (parentNode.getUserObject() instanceof Tour parentTour) {
+                        if (parentTour.getTitle().equals(OnboardingAssistant.ONBOARD_ASSISTANT_TITLE)) {
+                            event.setDropPossible(false, "Cannot drop into Virtual Onboarding Assistant");
+                            return false;
+                        }
+                    }
+                    // 更新目标位置的高亮
+                    if (toursTree.getCellRenderer() instanceof TreeRenderer renderer) {
+                        renderer.setDropTarget(targetNode.getUserObject());
+                        toursTree.repaint();
+                    }
+                    event.setDropPossible(true, "Drop here to move step");
+                    return true;
+                }
+
+                return false;
             }
 
             @Override
             public void drop(DnDEvent event) {
+                // 清除拖动状态
+                if (toursTree.getCellRenderer() instanceof TreeRenderer renderer) {
+                    renderer.setDragging(false, null);
+                    renderer.setDropTarget(null);
+                    toursTree.repaint();
+                }
+
                 Object attachedObject = event.getAttachedObject();
-                if (attachedObject instanceof String) {
-                    System.out.println("Dropped: " + attachedObject);
+                if (!(attachedObject instanceof DefaultMutableTreeNode)) {
+                    return;
+                }
+
+                DefaultMutableTreeNode draggedNode = (DefaultMutableTreeNode) attachedObject;
+                if (!(draggedNode.getUserObject() instanceof Step)) {
+                    return;
+                }
+
+                TreePath targetPath = toursTree.getPathForLocation(event.getPoint().x, event.getPoint().y);
+                if (targetPath == null) {
+                    return;
+                }
+
+                DefaultMutableTreeNode targetNode = (DefaultMutableTreeNode) targetPath.getLastPathComponent();
+                Step draggedStep = (Step) draggedNode.getUserObject();
+                
+                // 获取源Tour
+                DefaultMutableTreeNode sourceParent = (DefaultMutableTreeNode) draggedNode.getParent();
+                Tour sourceTour = (Tour) sourceParent.getUserObject();
+                
+                // 获取目标位置
+                if (targetNode.getUserObject() instanceof Tour) {
+                    // 如果目标是Tour，添加到Tour的最后
+                    Tour targetTour = (Tour) targetNode.getUserObject();
+                    if (targetTour != sourceTour) {
+                        // 如果是不同的Tour，需要移动Step
+                        targetTour.getSteps().add(draggedStep);
+                        sourceTour.getSteps().remove(draggedStep);
+                        StateManager.getInstance().getState(project).updateTour(sourceTour);
+                        StateManager.getInstance().getState(project).updateTour(targetTour);
+                    }
+                } else if (targetNode.getUserObject() instanceof Step) {
+                    // 如果目标是Step，插入到该Step之前
+                    Step targetStep = (Step) targetNode.getUserObject();
+                    DefaultMutableTreeNode targetParent = (DefaultMutableTreeNode) targetNode.getParent();
+                    Tour targetTour = (Tour) targetParent.getUserObject();
+                    
+                    int targetIndex = targetTour.getSteps().indexOf(targetStep);
+                    targetTour.getSteps().add(targetIndex, draggedStep);
+                    sourceTour.getSteps().remove(draggedStep);
+
+                    StateManager.getInstance().getState(project).updateTour(sourceTour);
+                    StateManager.getInstance().getState(project).updateTour(targetTour);
+                }
+                
+                // 通知UI更新
+                project.getMessageBus().syncPublisher(TourUpdateNotifier.TOPIC).tourUpdated(sourceTour);
+                if (targetNode.getUserObject() instanceof Tour) {
+                    project.getMessageBus().syncPublisher(TourUpdateNotifier.TOPIC).tourUpdated((Tour) targetNode.getUserObject());
                 }
             }
         }, toursTree);
