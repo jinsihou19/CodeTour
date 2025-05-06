@@ -24,6 +24,8 @@ repositories {
     mavenCentral()
 }
 
+
+
 // Configure Gradle IntelliJ Plugin - read more: https://github.com/JetBrains/gradle-intellij-plugin
 intellij {
     pluginName.set(properties("pluginName"))
@@ -49,6 +51,10 @@ qodana {
 }
 
 tasks {
+    initializeIntelliJPlugin {
+        selfUpdateCheck.set(false)
+    }
+
     // Set the JVM compatibility versions
     properties("javaVersion").let {
         withType<JavaCompile> {

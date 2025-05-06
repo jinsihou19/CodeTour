@@ -25,9 +25,11 @@ import static org.uom.lefterisxris.codetour.tours.service.Utils.renderFullDoc;
  */
 public class StepRendererPane extends JPanel {
 
-    private static final Pattern JAVA_FILE_PATTERN = java.util.regex.Pattern.compile("([\\w.]+\\.java):(\\d+)");
-    private static final Pattern METHOD_PATTERN = java.util.regex.Pattern.compile("([\\w.]+)#([\\w]+)");
-    private static final Pattern JBCEF_METHOD_PATTERN = Pattern.compile("file:///jbcefbrowser/([\\w.]+)#([\\w]+)");
+    private static final Pattern JAVA_FILE_LINE_PATTERN = java.util.regex.Pattern.compile("([\\w.]+\\.java):(\\d+)");
+    private static final Pattern METHOD_PATTERN = Pattern.compile("^([a-z][a-z0-9_$]*\\\\.)*[A-Z][a-zA-Z0-9_$]*$");
+    private static final Pattern CLASS_REGEX_PATTERN = Pattern.compile("^([a-z][a-z0-9_$]*\\.)*[A-Z][a-zA-Z0-9_$]*#([a-zA-Z0-9_$]+)$");
+    private static final Pattern JBCEF_METHOD_PATTERN = Pattern.compile("^file:///jbcefbrowser/([a-z][a-z0-9_$]*\\.)*[A-Z][a-zA-Z0-9_$]*$");
+    private static final Pattern JBCEF_CLASS_REGEX_PATTERN = Pattern.compile("^file:///jbcefbrowser/([a-z][a-z0-9_$]*\\.)*[A-Z][a-zA-Z0-9_$]*#([a-zA-Z0-9_$]+)$");
 
     private final Step step;
     private final Project project;
@@ -40,9 +42,11 @@ public class StepRendererPane extends JPanel {
     }
 
     private boolean matchCode(String url) {
-        return JAVA_FILE_PATTERN.matcher(url).matches()
+        return JAVA_FILE_LINE_PATTERN.matcher(url).matches()
+                || JBCEF_METHOD_PATTERN.matcher(url).matches()
+                || JBCEF_CLASS_REGEX_PATTERN.matcher(url).matches()
                 || METHOD_PATTERN.matcher(url).matches()
-                || JBCEF_METHOD_PATTERN.matcher(url).matches();
+                || CLASS_REGEX_PATTERN.matcher(url).matches();
     }
 
     private JComponent markdownJCEFHtmlPanelForRender() {
@@ -74,7 +78,7 @@ public class StepRendererPane extends JPanel {
         if (link.startsWith("http://") || link.startsWith("https://")) {
             BrowserUtil.browse(link);
             return true;
-        } else if (link.startsWith("navigate://") || matchCode(link)) {
+        } else if (link.startsWith(Navigator.NAVIGATE) || matchCode(link)) {
             Navigator.navigateCode(link, project);
             return true;
         }
