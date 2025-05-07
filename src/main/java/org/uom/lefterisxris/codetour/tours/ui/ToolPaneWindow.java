@@ -325,12 +325,18 @@ public class ToolPaneWindow {
                     boolean isAbove = dropPoint.y < (bounds.y + bounds.height / 2);
                     
                     int targetIndex = targetTour.getSteps().indexOf(targetStep);
+                    // 先移除原step
+                    int oldIndex = sourceTour.getSteps().indexOf(draggedStep);
+                    sourceTour.getSteps().remove(draggedStep);
+                    // 如果是同一个tour并且原index < 目标index，插入点要-1
+                    if (sourceTour == targetTour && oldIndex < targetIndex) {
+                        targetIndex--;
+                    }
                     // 如果拖放到下方，则插入到目标Step之后
                     if (!isAbove) {
                         targetIndex++;
                     }
                     targetTour.getSteps().add(targetIndex, draggedStep);
-                    sourceTour.getSteps().remove(draggedStep);
 
                     StateManager.getInstance().getState(project).updateTour(sourceTour);
                     StateManager.getInstance().getState(project).updateTour(targetTour);
