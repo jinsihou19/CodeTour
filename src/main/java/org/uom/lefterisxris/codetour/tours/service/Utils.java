@@ -117,10 +117,25 @@ public class Utils {
     }
 
     public static String mdToHtml(String markdown) {
-        // 预处理 PlantUML 代码块
         String processedMarkdown = markdown;
-        if (markdown.contains("@startuml")) {
-            processedMarkdown = markdown.replaceAll(
+        // 预处理 ![[]] 语法
+        if (processedMarkdown.contains("![[")) {
+            processedMarkdown = processedMarkdown.replaceAll(
+                    "!\\[\\[([^]]+)]]",
+                    "<img src=\"file:///$1\" alt=\"$1\">"
+            );
+        }
+        // 预处理 [[xx]] 语法
+        if (processedMarkdown.contains("[[")) {
+            processedMarkdown = processedMarkdown.replaceAll(
+                    "\\[\\[([^]]+)]]",
+                    "<a href=\"navigate://$1\">$1</a>"
+            );
+        }
+
+        // 预处理 PlantUML 代码块
+        if (processedMarkdown.contains("@startuml")) {
+            processedMarkdown = processedMarkdown.replaceAll(
                     "@startuml\\s*([\\s\\S]*?)@enduml",
                     "<div class='plantuml'>$1</div>"
             );
