@@ -239,14 +239,13 @@ public class Utils {
 
         if (html.contains("class='mermaid'")) {
             scripts.append("""
-                        <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+                        <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
                         <script>
                             document.addEventListener('DOMContentLoaded', function() {
                                 if (typeof mermaid !== 'undefined') {
                                     mermaid.initialize({
                                         startOnLoad: true,
                                         theme: 'dark',
-                                        securityLevel: 'loose'
                                     });
                                     mermaid.init(undefined, document.querySelectorAll('.mermaid'));
                                 }

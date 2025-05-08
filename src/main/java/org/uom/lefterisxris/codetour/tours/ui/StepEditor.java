@@ -7,6 +7,7 @@ import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTabbedPane;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.jcef.JBCefBrowser;
+import com.intellij.ui.jcef.JBCefBrowserBase;
 import com.intellij.ui.jcef.JBCefJSQuery;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UI;
@@ -83,7 +84,7 @@ public class StepEditor extends DialogWrapper {
                 .build();
 
         // 创建 JavaScript 查询处理器
-        jsQuery = JBCefJSQuery.create(editorBrowser);
+        jsQuery = JBCefJSQuery.create((JBCefBrowserBase)editorBrowser);
         jsQuery.addHandler((query) -> {
             currentMarkdown = query;
             updatePreviewComponent();
@@ -177,7 +178,6 @@ public class StepEditor extends DialogWrapper {
                 "mermaid.initialize({ " +
                 "  startOnLoad: true, " +
                 "  theme: 'dark', " +
-                "  securityLevel: 'loose' " +
                 "});" +
                 "var initialValue = '" + escapeJavaScript(currentMarkdown) + "';" +
                 """
@@ -190,7 +190,7 @@ public class StepEditor extends DialogWrapper {
                         insertTexts: {
                             link: ["[", "](navigate://)"],
                         },
-                        toolbar: ['bold', 'italic', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', 'clean-block', 'table', 'code', '|', 'link', 'image', '|', 'fullscreen'],
+                        toolbar: ['bold', 'italic', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', 'clean-block', 'table', 'code', '|', 'link', 'image', '|', 'undo', 'fullscreen'],
                         previewRender: function (plainText) {
                             var preview = document.createElement('div');
                             preview.className = 'markdown-body';
