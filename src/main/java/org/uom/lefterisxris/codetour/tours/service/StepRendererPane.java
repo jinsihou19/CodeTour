@@ -1,11 +1,16 @@
 package org.uom.lefterisxris.codetour.tours.service;
 
 import com.intellij.ide.BrowserUtil;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.ui.jcef.JBCefBrowser;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefFrame;
 import org.cef.handler.CefRequestHandlerAdapter;
+import org.cef.handler.CefResourceHandler;
+import org.cef.handler.CefResourceRequestHandler;
+import org.cef.handler.CefResourceRequestHandlerAdapter;
+import org.cef.misc.BoolRef;
 import org.cef.network.CefRequest;
 import org.uom.lefterisxris.codetour.tours.domain.Step;
 import org.uom.lefterisxris.codetour.tours.state.StateManager;
@@ -24,6 +29,8 @@ import static org.uom.lefterisxris.codetour.tours.service.Utils.renderFullDoc;
  * Date: 8/5/2022
  */
 public class StepRendererPane extends JPanel {
+
+    private static final Logger LOG = Logger.getInstance(StepRendererPane.class);
 
     private static final Pattern JAVA_FILE_LINE_PATTERN = java.util.regex.Pattern.compile("([\\w.]+\\.java):(\\d+)");
     private static final Pattern METHOD_PATTERN = Pattern.compile("^([a-z][a-z0-9_$]*\\\\.)*[A-Z][a-zA-Z0-9_$]*$");
@@ -67,11 +74,38 @@ public class StepRendererPane extends JPanel {
             @Override
             public boolean onBeforeBrowse(CefBrowser browser, CefFrame frame, CefRequest request,
                                           boolean user_gesture, boolean is_redirect) {
+                // 处理跳转
                 return dealWithJCEFLink(request.getURL());
+            }
+
+            @Override
+            public boolean onOpenURLFromTab(CefBrowser browser, CefFrame frame, String target_url, boolean user_gesture) {
+                LOG.warn("Canceling navigation for url:" + target_url + " (user_gesture=" + user_gesture + ")");
+                // 禁止其他页面的跳转
+                return true;
+            }
+
+            @Override
+            public CefResourceRequestHandler getResourceRequestHandler(CefBrowser browser, CefFrame frame, CefRequest request, boolean isNavigation, boolean isDownload, String requestInitiator, BoolRef disableDefaultHandling) {
+                return new CefResourceRequestHandlerAdapter() {
+                    @Override
+                    public CefResourceHandler getResourceHandler(CefBrowser browser, CefFrame frame, CefRequest request) {
+                        String url = request.getURL();
+                        if (url.startsWith("file:///") && !isIndex(url)) {
+                            return new ResourceHandler(project);
+                        }
+                        // 放行非必要处理请求
+                        return null;
+                    }
+                };
             }
         }, browser.getCefBrowser());
 
         return browser.getComponent();
+    }
+
+    private boolean isIndex( String url ){
+        return url.startsWith("file:///jbcefbrowser/") && url.endsWith("url=about:blank");
     }
 
     private boolean dealWithJCEFLink(String link) {

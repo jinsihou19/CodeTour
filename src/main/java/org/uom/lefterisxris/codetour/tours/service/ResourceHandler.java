@@ -1,5 +1,9 @@
 package org.uom.lefterisxris.codetour.tours.service;
 
+import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.vfs.VirtualFileManager;
 import org.cef.callback.CefCallback;
 import org.cef.handler.CefResourceHandler;
 import org.cef.misc.IntRef;
@@ -7,22 +11,42 @@ import org.cef.misc.StringRef;
 import org.cef.network.CefRequest;
 import org.cef.network.CefResponse;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 
 public class ResourceHandler implements CefResourceHandler {
+    private static final Logger LOG = Logger.getInstance(ResourceHandler.class);
+
     private InputStream inputStream;
     private String mimeType;
+    private Project project;
+
+    public ResourceHandler(Project project) {
+        this.project = project;
+    }
 
     @Override
     public boolean processRequest(CefRequest request, CefCallback callback) {
         String url = request.getURL();
+        // 如果是 jbcefbrowser 路径，直接返回 false，让系统处理
+        if (url.startsWith("file:///jbcefbrowser/")) {
+            return false;
+        }
+
         // 解析URL路径（例如 "myapp:///html/index.html"）
-        String resourcePath = url.replace("http://codecour", "");
+        String resourcePath = url.replace("file:///", "");
 
         // 从类路径加载资源
-        inputStream = getClass().getResourceAsStream(resourcePath);
-        if (inputStream == null) {
+//        inputStream = getClass().getResourceAsStream(resourcePath);
+        VirtualFile resourceFile = VirtualFileManager.getInstance().findFileByNioPath(new File(project.getBasePath() + "/" + resourcePath).toPath());
+        if (resourceFile == null) {
+            return false;
+        }
+        try {
+            inputStream = resourceFile.getInputStream();
+        } catch (IOException e) {
+            LOG.error(e);
             return false;
         }
 
@@ -33,6 +57,16 @@ public class ResourceHandler implements CefResourceHandler {
             mimeType = "text/css";
         } else if (resourcePath.endsWith(".js")) {
             mimeType = "application/javascript";
+        } else if (resourcePath.endsWith(".png")) {
+            mimeType = "image/png";
+        } else if (resourcePath.endsWith(".jpg") || resourcePath.endsWith(".jpeg")) {
+            mimeType = "image/jpeg";
+        } else if (resourcePath.endsWith(".gif")) {
+            mimeType = "image/gif";
+        } else if (resourcePath.endsWith(".svg")) {
+            mimeType = "image/svg+xml";
+        } else if (resourcePath.endsWith(".excalidraw")) {
+            mimeType = "application/json";
         } else {
             mimeType = "application/octet-stream";
         }
