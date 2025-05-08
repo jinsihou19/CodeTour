@@ -104,7 +104,7 @@ public class StepRendererPane extends JPanel {
         return browser.getComponent();
     }
 
-    private boolean isIndex( String url ){
+    private boolean isIndex(String url) {
         return url.startsWith("file:///jbcefbrowser/") && url.endsWith("url=about:blank");
     }
 
@@ -114,6 +114,9 @@ public class StepRendererPane extends JPanel {
             return true;
         } else if (link.startsWith(Navigator.NAVIGATE) || matchCode(link)) {
             Navigator.navigateCode(link, project);
+            return true;
+        } else if (link.startsWith(Navigator.TOUR)) {
+            Navigator.navigateTour(link, project);
             return true;
         }
         return false;

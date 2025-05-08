@@ -18,11 +18,15 @@ import com.intellij.util.SlowOperations;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.uom.lefterisxris.codetour.tours.domain.Step;
+import org.uom.lefterisxris.codetour.tours.domain.Tour;
+import org.uom.lefterisxris.codetour.tours.state.StateManager;
+import org.uom.lefterisxris.codetour.tours.state.StepSelectionNotifier;
 import org.uom.lefterisxris.codetour.tours.ui.CodeTourNotifier;
 
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -36,6 +40,7 @@ import java.util.stream.Collectors;
 public class Navigator {
 
     public static final String NAVIGATE = "navigate://";
+    public static final String TOUR = "tour://";
     private static final String FILE_JBCEFBROWSER = "file:///jbcefbrowser/";
 
     public static void navigateLine(@NotNull Step step, @NotNull Project project, BiConsumer<Step, Project> renderStep) {
@@ -227,6 +232,49 @@ public class Navigator {
         if (navigatable.canNavigate()) {
             navigatable.navigate(true);
         }
+    }
+
+    /**
+     * 导航到指定的 tour 和 step
+     * 格式：tour:abc.tour#stepTitle
+     */
+    public static void navigateTour(String tourUrl, Project project) {
+        if(!tourUrl.startsWith(TOUR)) {
+            return;
+        }
+
+        String[] parts = tourUrl.substring(TOUR.length()).split("#");
+        if (parts.length != 2) {
+            CodeTourNotifier.error(project, "Invalid tour navigation format. Expected format: tour:abc.tour#stepTitle");
+            return;
+        }
+
+        String tourFile = parts[0];
+        String stepTitle = parts[1];
+
+        // 查找 tour
+        Optional<Tour> tour = StateManager.getInstance().getState(project).getTours().stream()
+                .filter(t -> t.getTourFile().equals(tourFile))
+                .findFirst();
+
+        if (tour.isEmpty()) {
+            CodeTourNotifier.error(project, String.format("Could not find tour '%s'", tourFile));
+            return;
+        }
+
+        // 查找 step
+        Optional<Step> step = tour.get().getSteps().stream()
+                .filter(s -> s.getTitle().equals(stepTitle))
+                .findFirst();
+
+        if (step.isEmpty()) {
+            CodeTourNotifier.error(project, String.format("Could not find step '%s' in tour '%s'", stepTitle, tourFile));
+            return;
+        }
+
+        // 激活 tour 并导航到 step
+        StateManager.getInstance().getState(project).setActiveTour(tour.get());
+        project.getMessageBus().syncPublisher(StepSelectionNotifier.TOPIC).selectStep(step.get());
     }
 
 }

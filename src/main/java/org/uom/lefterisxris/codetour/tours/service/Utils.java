@@ -13,12 +13,15 @@ import org.uom.lefterisxris.codetour.tours.domain.Props;
 import org.uom.lefterisxris.codetour.tours.domain.Step;
 
 import java.nio.file.Paths;
+import java.util.regex.Pattern;
 
 /**
  * @author Eleftherios Chrysochoidis
  * Date: 21/5/2022
  */
 public class Utils {
+
+    public static final Pattern WIKI_LINK = Pattern.compile("\\[\\[([^]]+)]]");
 
     /**
      * Custom TagRenderer for md to html, as for some strange reason there is no default implementation now
@@ -127,10 +130,13 @@ public class Utils {
         }
         // 预处理 [[xx]] 语法
         if (processedMarkdown.contains("[[")) {
-            processedMarkdown = processedMarkdown.replaceAll(
-                    "\\[\\[([^]]+)]]",
-                    "<a href=\"navigate://$1\">$1</a>"
-            );
+            processedMarkdown = WIKI_LINK.matcher(processedMarkdown).replaceAll(matchResult -> {
+                String group = matchResult.group(1);
+                if (group.contains(".tour")) {
+                    return group.replaceAll("([^#:]+)\\.tour#([^]]+)", "<a href=\"tour://$1.tour#$2\">$1.tour#$2</a>");
+                }
+                return "<a href=\"navigate://$1\">$1</a>";
+            });
         }
 
         // 预处理 PlantUML 代码块
