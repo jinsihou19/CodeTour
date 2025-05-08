@@ -84,7 +84,7 @@ public class StepEditor extends DialogWrapper {
                 .build();
 
         // 创建 JavaScript 查询处理器
-        jsQuery = JBCefJSQuery.create((JBCefBrowserBase)editorBrowser);
+        jsQuery = JBCefJSQuery.create((JBCefBrowserBase) editorBrowser);
         jsQuery.addHandler((query) -> {
             currentMarkdown = query;
             updatePreviewComponent();
@@ -190,7 +190,7 @@ public class StepEditor extends DialogWrapper {
                         insertTexts: {
                             link: ["[", "](navigate://)"],
                         },
-                        toolbar: ['bold', 'italic', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', 'clean-block', 'table', 'code', '|', 'link', 'image', '|', 'undo', 'fullscreen'],
+                        toolbar: ['bold', 'italic', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', 'clean-block', 'table', 'code', '|', 'link', 'image', '|', 'undo', 'redo', 'fullscreen'],
                         previewRender: function (plainText) {
                             var preview = document.createElement('div');
                             preview.className = 'markdown-body';
